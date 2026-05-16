@@ -472,7 +472,7 @@ class DonationRecurringRule(models.Model):
 
         amount = self.amount
         if self.cover_fees:
-            fee_pct = self.payment_token_id.provider_id.get_donation_fee_coverage_percent()
+            fee_pct = self.payment_token_id.payment_method_id.get_donation_fee_coverage_percent()
             amount = round(self.amount * (1 + fee_pct / 100), 2)
 
         donation = self.env['donation.donation'].with_context(from_website=True).create({
@@ -507,6 +507,19 @@ class DonationRecurringRule(models.Model):
             return from_date + relativedelta(months=1)
         return from_date
 
+    def _advance_next_date_after_pause(self):
+        """Move next_donation_date forward until it is after today (no catch-up charges)."""
+        self.ensure_one()
+        today = fields.Date.today()
+        next_date = self.next_donation_date
+        if not next_date or next_date >= today:
+            return next_date
+        for _ in range(500):
+            if next_date > today:
+                break
+            next_date = self._calculate_next_date(next_date)
+        return next_date
+
     def _handle_payment_failure(self, donation):
         self.message_post(
             body=f"Payment failed for recurring donation {donation.name}",
@@ -523,7 +536,11 @@ class DonationRecurringRule(models.Model):
         self.write({'state': 'paused'})
 
     def action_resume(self):
-        self.write({'state': 'active'})
+        for rule in self:
+            vals = {'state': 'active'}
+            if rule.next_donation_date and rule.next_donation_date < fields.Date.today():
+                vals['next_donation_date'] = rule._advance_next_date_after_pause()
+            rule.write(vals)
 
     def action_deactivate(self):
         self.write({'state': 'cancelled'})

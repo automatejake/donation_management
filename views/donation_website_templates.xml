@@ -2,12 +2,11 @@
 <odoo>
     <template id="donation_form_page" name="Donation Form">
         <t t-call="website.layout">
-            <div id="wrap" class="oe_structure">
-                <section class="s_donation_form py-5">
+            <div id="wrap" class="oe_structure o_donation_page">
+                <section class="s_donation_form">
                     <div class="container">
                         <div class="row justify-content-center">
                             <div class="col-lg-8">
-                                <h1 class="text-center mb-4">Make a Donation</h1>
 
                                 <t t-if="error">
                                     <div class="alert alert-danger" role="alert">
@@ -153,7 +152,7 @@
                                                                    name="payment_method"
                                                                    t-att-id="'payment_token_%s' % token.id"
                                                                    t-att-value="'token_%s' % token.id"
-                                                                   t-att-data-fee-percent="token.provider_id.get_donation_fee_coverage_percent()"
+                                                                   t-att-data-fee-percent="token.payment_method_id.get_donation_fee_coverage_percent()"
                                                                    t-att-checked="'checked' if token_index == 0 else None"
                                                                    required="required"/>
                                                             <span class="donation-payment-option-body">

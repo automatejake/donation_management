@@ -77,8 +77,8 @@ class DonationWebsiteController(http.Controller):
                 return provider.get_donation_fee_coverage_percent()
         if method_type == 'token' and method_id:
             token = request.env['payment.token'].sudo().browse(method_id)
-            if token.exists():
-                return token.provider_id.get_donation_fee_coverage_percent()
+            if token.exists() and token.payment_method_id:
+                return token.payment_method_id.get_donation_fee_coverage_percent()
         return self._get_default_fee_coverage_percent()
 
     def _parse_amounts(self, post):
@@ -139,7 +139,7 @@ class DonationWebsiteController(http.Controller):
             'display_name': token.display_name,
             'payment_method': token.payment_method_id.name,
             'provider_name': token.provider_id.name,
-            'fee_percent': token.provider_id.get_donation_fee_coverage_percent(),
+            'fee_percent': token.payment_method_id.get_donation_fee_coverage_percent(),
         } for token in tokens]
 
     @http.route('/donate/submit', type='http', auth='public', website=True, methods=['POST'], csrf=True)
@@ -438,10 +438,15 @@ class DonationPortal(CustomerPortal):
         values = super()._prepare_home_portal_values(counters)
         if 'donation_count' in counters:
             partner = request.env.user.partner_id
-            values['donation_count'] = request.env['donation.donation'].search_count([
+            confirmed_count = request.env['donation.donation'].search_count([
                 ('partner_id', '=', partner.id),
                 ('state', '=', 'confirmed'),
             ])
+            recurring_count = request.env['donation.recurring.rule'].search_count([
+                ('partner_id', '=', partner.id),
+                ('state', 'in', ('active', 'paused')),
+            ])
+            values['donation_count'] = confirmed_count + recurring_count
         return values
 
     @http.route(['/my/donations', '/my/donations/page/<int:page>'], type='http', auth='user', website=True)
@@ -479,8 +484,8 @@ class DonationPortal(CustomerPortal):
         )
         recurring_rules = request.env['donation.recurring.rule'].sudo().search([
             ('partner_id', '=', partner.id),
-            ('state', '=', 'active'),
-        ])
+            ('state', 'in', ('active', 'paused')),
+        ], order='state asc, next_donation_date asc, id desc')
 
         values.update({
             'date_begin': date_begin,
@@ -523,6 +528,7 @@ class DonationPortal(CustomerPortal):
         rule = request.env['donation.recurring.rule'].sudo().search([
             ('id', '=', rule_id),
             ('partner_id', '=', request.env.user.partner_id.id),
+            ('state', '=', 'active'),
         ], limit=1)
         if rule:
             rule.action_pause()
@@ -533,6 +539,7 @@ class DonationPortal(CustomerPortal):
         rule = request.env['donation.recurring.rule'].sudo().search([
             ('id', '=', rule_id),
             ('partner_id', '=', request.env.user.partner_id.id),
+            ('state', '=', 'paused'),
         ], limit=1)
         if rule:
             rule.action_resume()

@@ -1,17 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Portal: My Account Menu -->
-    <template id="portal_my_home_menu_donations" name="Portal My Home: Donations" inherit_id="portal.portal_my_home" priority="30">
+    <!-- Portal: breadcrumbs -->
+    <template id="portal_my_home_menu_donations_breadcrumbs" name="Portal layout: donation menu entries" inherit_id="portal.portal_breadcrumbs" priority="35">
+        <xpath expr="//ol[hasclass('o_portal_submenu')]" position="inside">
+            <li t-if="page_name == 'donation'" class="breadcrumb-item active">
+                <span>Donations</span>
+            </li>
+        </xpath>
+    </template>
+
+    <!-- Portal: My Account card -->
+    <template id="portal_my_home_menu_donations" name="Portal My Home: Donations" customize_show="True" inherit_id="portal.portal_my_home" priority="35">
         <xpath expr="//div[hasclass('o_portal_docs')]" position="before">
-            <t t-set="donation_count" t-value="donation_count or 0"/>
-            <t t-if="donation_count" t-call="portal.portal_docs_entry">
-                <t t-set="icon" t-value="'/donation_management/static/src/img/heart-icon.png'"/>
+            <t t-set="portal_client_category_enable" t-value="True"/>
+        </xpath>
+        <div id="portal_client_category" position="inside">
+            <t t-call="portal.portal_docs_entry">
+                <t t-set="icon" t-value="'/donation_management/static/src/img/donation-heart.svg'"/>
                 <t t-set="title">Donations</t>
                 <t t-set="url" t-value="'/my/donations'"/>
                 <t t-set="text">View your donation history and manage recurring donations</t>
                 <t t-set="placeholder_count" t-value="'donation_count'"/>
+                <t t-set="config_card" t-value="True"/>
             </t>
-        </xpath>
+        </div>
     </template>
 
     <!-- Portal: My Donations List -->
@@ -23,12 +35,12 @@
                 <t t-set="title">Donations</t>
             </t>
 
-            <!-- Active Recurring Donations -->
+            <!-- Recurring Donations (active and paused) -->
             <t t-if="recurring_rules">
                 <div class="card mb-4">
-                    <div class="card-header bg-primary text-white">
+                    <div class="card-header">
                         <h4 class="mb-0">
-                            <i class="fa fa-refresh me-2"></i>Active Recurring Donations
+                            <i class="fa fa-refresh me-2"></i>Recurring Donations
                         </h4>
                     </div>
                     <div class="card-body">
@@ -37,6 +49,7 @@
                                 <thead>
                                     <tr>
                                         <th>Reference</th>
+                                        <th>Status</th>
                                         <th>Amount</th>
                                         <th>Frequency</th>
                                         <th>Next Donation</th>
@@ -49,17 +62,33 @@
                                         <tr>
                                             <td><t t-esc="rule.name"/></td>
                                             <td>
+                                                <span t-if="rule.state == 'active'" class="badge rounded-pill text-bg-success">Active</span>
+                                                <span t-elif="rule.state == 'paused'" class="badge rounded-pill text-bg-warning">Paused</span>
+                                            </td>
+                                            <td>
                                                 <t t-esc="rule.amount" t-options="{'widget': 'monetary', 'display_currency': rule.currency_id}"/>
                                             </td>
-                                            <td><t t-esc="rule.frequency.title()"/></td>
-                                            <td><t t-esc="rule.next_donation_date" t-options="{'widget': 'date'}"/></td>
+                                            <td>
+                                                <t t-if="rule.frequency == 'weekly'">Weekly</t>
+                                                <t t-elif="rule.frequency == 'biweekly'">Bi-weekly</t>
+                                                <t t-elif="rule.frequency == 'monthly'">Monthly</t>
+                                                <t t-else=""><t t-esc="rule.frequency"/></t>
+                                            </td>
+                                            <td>
+                                                <t t-if="rule.state == 'active'">
+                                                    <t t-esc="rule.next_donation_date" t-options="{'widget': 'date'}"/>
+                                                </t>
+                                                <t t-else="">
+                                                    <span class="text-muted">—</span>
+                                                </t>
+                                            </td>
                                             <td><t t-esc="rule.donation_count"/></td>
                                             <td>
-                                                <div class="btn-group btn-group-sm" role="group">
+                                                <div class="d-flex flex-wrap gap-1">
                                                     <t t-if="rule.state == 'active'">
                                                         <form method="POST" t-attf-action="/my/recurring_donations/#{rule.id}/pause" class="d-inline">
                                                             <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                                                            <button type="submit" class="btn btn-warning">
+                                                            <button type="submit" class="btn btn-sm btn-warning">
                                                                 <i class="fa fa-pause"></i> Pause
                                                             </button>
                                                         </form>
@@ -67,14 +96,15 @@
                                                     <t t-if="rule.state == 'paused'">
                                                         <form method="POST" t-attf-action="/my/recurring_donations/#{rule.id}/resume" class="d-inline">
                                                             <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                                                            <button type="submit" class="btn btn-success">
+                                                            <button type="submit" class="btn btn-sm btn-success">
                                                                 <i class="fa fa-play"></i> Resume
                                                             </button>
                                                         </form>
                                                     </t>
                                                     <form method="POST" t-attf-action="/my/recurring_donations/#{rule.id}/cancel" class="d-inline">
                                                         <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                                                        <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to cancel this recurring donation?');">
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                                onclick="return confirm('Cancel this recurring donation permanently? This cannot be undone.');">
                                                             <i class="fa fa-times"></i> Cancel
                                                         </button>
                                                     </form>
@@ -85,6 +115,9 @@
                                 </tbody>
                             </table>
                         </div>
+                        <p class="text-muted small mb-0 mt-3">
+                            Paused donations stay listed here so you can resume them anytime. Cancel ends the schedule permanently.
+                        </p>
                     </div>
                 </div>
             </t>

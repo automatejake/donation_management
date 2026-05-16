@@ -1,8 +1,29 @@
 /* Donation Management Styles */
 
-.s_donation_form h1 {
-    color: white;
+/* Tight layout under the site header on /donate */
+#wrapwrap main #wrap.o_donation_page {
+    padding-top: 0;
+    margin-top: 0;
+}
+
+#wrap.o_donation_page {
+    padding-top: 0;
+}
+
+#wrap.o_donation_page > .oe_structure:empty {
+    display: none;
+}
+
+.s_donation_form {
+    padding-top: 0.75rem;
+    padding-bottom: 2rem;
+}
+
+.s_donation_form .donation-form-title {
+    margin-top: 0;
+    margin-bottom: 1rem;
     font-weight: 700;
+    color: #212529;
 }
 
 .donation-form .card {

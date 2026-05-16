@@ -28,6 +28,7 @@
         'data/donation_data.xml',
         'data/donation_cron.xml',
         'views/payment_provider_views.xml',
+        'views/payment_method_views.xml',
         'views/donation_views.xml',
         'views/donation_portal_templates.xml',
         'views/donation_website_templates.xml',

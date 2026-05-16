@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="payment_method_form_donation" model="ir.ui.view">
+        <field name="name">payment.method.form.donation</field>
+        <field name="model">payment.method</field>
+        <field name="inherit_id" ref="payment.payment_method_form"/>
+        <field name="arch" type="xml">
+            <page name="configuration" position="after">
+                <page string="Donation Fees" name="donation_fees">
+                    <group>
+                        <field name="donation_fee_coverage_percent"/>
+                        <p colspan="2" class="text-muted mb-0">
+                            Used when donors choose to cover processing fees on the website.
+                            If unset (0), the fee on the linked payment provider or the system default applies.
+                        </p>
+                    </group>
+                </page>
+            </page>
+            <field name="support_refund" position="after">
+                <field name="donation_fee_coverage_percent"
+                       groups="base.group_no_one"/>
+            </field>
+        </field>
+    </record>
+</odoo>
