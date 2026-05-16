@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Donation Manager Group -->
+    <record id="group_donation_manager" model="res.groups">
+        <field name="name">Donation Manager</field>
+        <!-- <field name="category_id" ref="base.module_category_operations"/> -->
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <!-- Donation User Group -->
+    <record id="group_donation_user" model="res.groups">
+        <field name="name">Donation User</field>
+        <!-- <field name="category_id" ref="base.module_category_operations"/> -->
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <!-- Record Rules -->
+    
+    <!-- Donation: Manager can see all -->
+    <record id="donation_manager_rule" model="ir.rule">
+        <field name="name">Donation Manager: All Donations</field>
+        <field name="model_id" ref="model_donation_donation"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_donation_manager'))]"/>
+    </record>
+
+    <!-- Donation: User can see all -->
+    <record id="donation_user_rule" model="ir.rule">
+        <field name="name">Donation User: All Donations</field>
+        <field name="model_id" ref="model_donation_donation"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_donation_user'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+
+    <!-- Donation: Portal users see their own -->
+    <record id="donation_portal_rule" model="ir.rule">
+        <field name="name">Donation Portal: Own Donations</field>
+        <field name="model_id" ref="model_donation_donation"/>
+        <field name="domain_force">[('partner_id', '=', user.partner_id.id)]</field>
+        <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+
+    <!-- Recurring Rule: Manager can see all -->
+    <record id="recurring_manager_rule" model="ir.rule">
+        <field name="name">Recurring Rule Manager: All Rules</field>
+        <field name="model_id" ref="model_donation_recurring_rule"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_donation_manager'))]"/>
+    </record>
+
+    <!-- Recurring Rule: Portal users see their own -->
+    <record id="recurring_portal_rule" model="ir.rule">
+        <field name="name">Recurring Rule Portal: Own Rules</field>
+        <field name="model_id" ref="model_donation_recurring_rule"/>
+        <field name="domain_force">[('partner_id', '=', user.partner_id.id)]</field>
+        <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+
+    <!-- Donation category: public/portal read active records only -->
+    <record id="donation_category_public_rule" model="ir.rule">
+        <field name="name">Donation Category: Active Only</field>
+        <field name="model_id" ref="model_donation_category"/>
+        <field name="domain_force">[('active', '=', True)]</field>
+        <field name="groups" eval="[(4, ref('base.group_public')), (4, ref('base.group_portal'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+
+    <!-- Campaign: Public can read active campaigns -->
+    <record id="campaign_public_rule" model="ir.rule">
+        <field name="name">Campaign Public: Active Campaigns</field>
+        <field name="model_id" ref="model_donation_campaign"/>
+        <field name="domain_force">[('active', '=', True)]</field>
+        <field name="groups" eval="[(4, ref('base.group_public')), (4, ref('base.group_portal'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+
+</odoo>

@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Portal: My Account Menu -->
+    <template id="portal_my_home_menu_donations" name="Portal My Home: Donations" inherit_id="portal.portal_my_home" priority="30">
+        <xpath expr="//div[hasclass('o_portal_docs')]" position="before">
+            <t t-set="donation_count" t-value="donation_count or 0"/>
+            <t t-if="donation_count" t-call="portal.portal_docs_entry">
+                <t t-set="icon" t-value="'/donation_management/static/src/img/heart-icon.png'"/>
+                <t t-set="title">Donations</t>
+                <t t-set="url" t-value="'/my/donations'"/>
+                <t t-set="text">View your donation history and manage recurring donations</t>
+                <t t-set="placeholder_count" t-value="'donation_count'"/>
+            </t>
+        </xpath>
+    </template>
+
+    <!-- Portal: My Donations List -->
+    <template id="portal_my_donations" name="My Donations">
+        <t t-call="portal.portal_layout">
+            <t t-set="breadcrumbs_searchbar" t-value="True"/>
+
+            <t t-call="portal.portal_searchbar">
+                <t t-set="title">Donations</t>
+            </t>
+
+            <!-- Active Recurring Donations -->
+            <t t-if="recurring_rules">
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0">
+                            <i class="fa fa-refresh me-2"></i>Active Recurring Donations
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Reference</th>
+                                        <th>Amount</th>
+                                        <th>Frequency</th>
+                                        <th>Next Donation</th>
+                                        <th>Total Donations</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="recurring_rules" t-as="rule">
+                                        <tr>
+                                            <td><t t-esc="rule.name"/></td>
+                                            <td>
+                                                <t t-esc="rule.amount" t-options="{'widget': 'monetary', 'display_currency': rule.currency_id}"/>
+                                            </td>
+                                            <td><t t-esc="rule.frequency.title()"/></td>
+                                            <td><t t-esc="rule.next_donation_date" t-options="{'widget': 'date'}"/></td>
+                                            <td><t t-esc="rule.donation_count"/></td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm" role="group">
+                                                    <t t-if="rule.state == 'active'">
+                                                        <form method="POST" t-attf-action="/my/recurring_donations/#{rule.id}/pause" class="d-inline">
+                                                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                                            <button type="submit" class="btn btn-warning">
+                                                                <i class="fa fa-pause"></i> Pause
+                                                            </button>
+                                                        </form>
+                                                    </t>
+                                                    <t t-if="rule.state == 'paused'">
+                                                        <form method="POST" t-attf-action="/my/recurring_donations/#{rule.id}/resume" class="d-inline">
+                                                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                                            <button type="submit" class="btn btn-success">
+                                                                <i class="fa fa-play"></i> Resume
+                                                            </button>
+                                                        </form>
+                                                    </t>
+                                                    <form method="POST" t-attf-action="/my/recurring_donations/#{rule.id}/cancel" class="d-inline">
+                                                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                                        <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to cancel this recurring donation?');">
+                                                            <i class="fa fa-times"></i> Cancel
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </t>
+
+            <!-- Donation History -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="row">
+                        <div class="col">
+                            <h4 class="mb-0">
+                                <i class="fa fa-history me-2"></i>Donation History
+                            </h4>
+                        </div>
+                        <div class="col-auto">
+                            <a href="/donate" class="btn btn-primary btn-sm">
+                                <i class="fa fa-plus me-1"></i>Make Another Donation
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <t t-if="not donations">
+                        <div class="text-center py-5">
+                            <i class="fa fa-heart-o" style="font-size: 64px; color: #ccc;"></i>
+                            <p class="mt-3 text-muted">You haven't made any donations yet.</p>
+                            <a href="/donate" class="btn btn-primary">Make Your First Donation</a>
+                        </div>
+                    </t>
+                    <t t-if="donations">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Reference</th>
+                                        <th>Campaign</th>
+                                        <th>Amount</th>
+                                        <th>Type</th>
+                                        <th>Tax Receipt</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="donations" t-as="donation">
+                                        <tr>
+                                            <td><t t-esc="donation.date" t-options="{'widget': 'date'}"/></td>
+                                            <td><t t-esc="donation.name"/></td>
+                                            <td>
+                                                <t t-if="donation.campaign_id">
+                                                    <t t-esc="donation.campaign_id.name"/>
+                                                </t>
+                                                <t t-else="">
+                                                    <span class="text-muted">General</span>
+                                                </t>
+                                            </td>
+                                            <td>
+                                                <strong>
+                                                    <t t-esc="donation.amount" t-options="{'widget': 'monetary', 'display_currency': donation.currency_id}"/>
+                                                </strong>
+                                            </td>
+                                            <td>
+                                                <t t-if="donation.is_recurring">
+                                                    <span class="badge bg-info">
+                                                        <i class="fa fa-refresh"></i> Recurring
+                                                    </span>
+                                                </t>
+                                                <t t-else="">
+                                                    <span class="badge bg-secondary">One-time</span>
+                                                </t>
+                                            </td>
+                                            <td>
+                                                <t t-if="donation.tax_receipt_number">
+                                                    <span class="text-muted"><t t-esc="donation.tax_receipt_number"/></span>
+                                                </t>
+                                            </td>
+                                            <td class="text-end">
+                                                <a t-attf-href="/my/donations/#{donation.id}" class="btn btn-sm btn-outline-primary">
+                                                    View
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                                <tfoot t-if="len(donations) > 0">
+                                    <tr class="table-light">
+                                        <td colspan="3" class="text-end"><strong>Total Donated:</strong></td>
+                                        <td colspan="4">
+                                            <strong>
+                                                <t t-esc="sum(donations.mapped('amount'))" 
+                                                   t-options="{'widget': 'monetary', 'display_currency': donations[0].currency_id}"/>
+                                            </strong>
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+
+                        <div t-if="pager" class="o_portal_pager text-center">
+                            <t t-call="portal.pager"/>
+                        </div>
+                    </t>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- Portal: Donation Detail -->
+    <template id="portal_donation_detail" name="Donation Detail">
+        <t t-call="portal.portal_layout">
+            <t t-set="o_portal_fullwidth_alert" groups="donation_management.group_donation_manager">
+                <t t-call="portal.portal_back_in_edit_mode">
+                    <t t-set="backend_url" t-value="'/web#model=donation.donation&amp;id=%s&amp;action=%s&amp;view_type=form' % (donation.id, donation.env.ref('donation_management.action_donation').id)"/>
+                </t>
+            </t>
+
+            <div class="container mt-4">
+                <div class="row justify-content-center">
+                    <div class="col-lg-8">
+                        <div class="card">
+                            <div class="card-header bg-success text-white">
+                                <h3 class="mb-0">
+                                    <i class="fa fa-heart me-2"></i>Donation Details
+                                </h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="row mb-3">
+                                    <div class="col-sm-4 text-muted">Reference:</div>
+                                    <div class="col-sm-8"><strong><t t-esc="donation.name"/></strong></div>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-sm-4 text-muted">Date:</div>
+                                    <div class="col-sm-8"><t t-esc="donation.date" t-options="{'widget': 'datetime'}"/></div>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-sm-4 text-muted">Amount:</div>
+                                    <div class="col-sm-8">
+                                        <h4 class="text-success mb-0">
+                                            <t t-esc="donation.amount" t-options="{'widget': 'monetary', 'display_currency': donation.currency_id}"/>
+                                        </h4>
+                                    </div>
+                                </div>
+                                <t t-if="donation.campaign_id">
+                                    <div class="row mb-3">
+                                        <div class="col-sm-4 text-muted">Campaign:</div>
+                                        <div class="col-sm-8"><t t-esc="donation.campaign_id.name"/></div>
+                                    </div>
+                                </t>
+                                <t t-if="donation.category_id">
+                                    <div class="row mb-3">
+                                        <div class="col-sm-4 text-muted">Category:</div>
+                                        <div class="col-sm-8"><t t-esc="donation.category_id.name"/></div>
+                                    </div>
+                                </t>
+                                <t t-if="donation.is_recurring">
+                                    <div class="row mb-3">
+                                        <div class="col-sm-4 text-muted">Type:</div>
+                                        <div class="col-sm-8">
+                                            <span class="badge bg-info">
+                                                <i class="fa fa-refresh"></i> Recurring (<t t-esc="donation.frequency.title()"/>)
+                                            </span>
+                                        </div>
+                                    </div>
+                                </t>
+                                <t t-if="donation.purpose">
+                                    <div class="row mb-3">
+                                        <div class="col-sm-4 text-muted">Purpose/Message:</div>
+                                        <div class="col-sm-8"><t t-esc="donation.purpose"/></div>
+                                    </div>
+                                </t>
+                                <t t-if="donation.tax_receipt_number">
+                                    <div class="row mb-3">
+                                        <div class="col-sm-4 text-muted">Tax Receipt Number:</div>
+                                        <div class="col-sm-8"><t t-esc="donation.tax_receipt_number"/></div>
+                                    </div>
+                                </t>
+                                <div class="row mb-3">
+                                    <div class="col-sm-4 text-muted">Status:</div>
+                                    <div class="col-sm-8">
+                                        <span t-attf-class="badge bg-{{ 'success' if donation.state == 'confirmed' else 'warning' }}">
+                                            <t t-esc="donation.state.title()"/>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-footer text-center">
+                                <a href="/my/donations" class="btn btn-secondary">
+                                    <i class="fa fa-arrow-left me-1"></i>Back to Donations
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Thank You Message -->
+                        <div class="alert alert-success mt-4" role="alert">
+                            <h4 class="alert-heading">Thank You!</h4>
+                            <p class="mb-0">Your generosity makes a real difference. Thank you for your support!</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+</odoo>

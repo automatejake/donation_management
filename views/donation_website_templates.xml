@@ -1,0 +1,322 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Donation Form Page -->
+    <template id="donation_form_page" name="Donation Form">
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure">
+                <section class="s_donation_form py-5">
+                    <div class="container">
+                        <div class="row justify-content-center">
+                            <div class="col-lg-8">
+                                <h1 class="text-center mb-4">Make a Donation</h1>
+                                
+                                <!-- Success/Error Messages -->
+                                <t t-if="error">
+                                    <div class="alert alert-danger" role="alert">
+                                        <t t-if="error == 'invalid_amount'">Please enter a valid donation amount.</t>
+                                        <t t-if="error == 'invalid_provider'">Please select a valid payment method.</t>
+                                        <t t-if="error == 'invalid_category'">Please select a valid donation category.</t>
+                                        <t t-if="error == 'no_payment_method'">This payment provider is not configured with any payment methods. Please contact the site administrator.</t>
+                                        <t t-if="error == 'invalid_payment'">We could not process your payment. Please try again or pick another payment method.</t>
+                                        <t t-if="error == 'access_denied'">Access denied to this donation.</t>
+                                        <t t-else=""><t t-esc="error"/></t>
+                                    </div>
+                                </t>
+                                
+                                <t t-if="success">
+                                    <div class="alert alert-success" role="alert">
+                                        Thank you for your donation!
+                                    </div>
+                                </t>
+
+                                <div class="card shadow-sm">
+                                    <div class="card-body p-4">
+                                        <form action="/donate/submit" method="POST" class="donation-form">
+                                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                            
+                                            <!-- Campaign Selection -->
+                                            <div class="mb-4" t-if="campaigns">
+                                                <label for="campaign_id" class="form-label">Support a Campaign (Optional)</label>
+                                                <select name="campaign_id" id="campaign_id" class="form-select">
+                                                    <option value="">General Donation</option>
+                                                    <t t-foreach="campaigns" t-as="campaign">
+                                                        <option t-att-value="campaign.id">
+                                                            <t t-esc="campaign.name"/>
+                                                            <t t-if="campaign.goal_amount">
+                                                                - <t t-esc="campaign.total_raised" t-options="{'widget': 'monetary', 'display_currency': campaign.currency_id}"/> 
+                                                                of <t t-esc="campaign.goal_amount" t-options="{'widget': 'monetary', 'display_currency': campaign.currency_id}"/>
+                                                            </t>
+                                                        </option>
+                                                    </t>
+                                                </select>
+                                            </div>
+
+                                            <!-- Donation category (maps to income account) -->
+                                            <div class="mb-4" t-if="categories">
+                                                <label for="category_id" class="form-label">Donation category</label>
+                                                <select name="category_id" id="category_id" class="form-select">
+                                                    <option value="">General (no specific fund)</option>
+                                                    <t t-foreach="categories" t-as="cat">
+                                                        <option t-att-value="cat.id"><t t-esc="cat.name"/></option>
+                                                    </t>
+                                                </select>
+                                                <small class="form-text text-muted">Categories are used for accounting and reporting.</small>
+                                            </div>
+
+                                            <!-- Amount Selection -->
+                                            <div class="mb-4">
+                                                <label class="form-label fw-bold">Donation Amount *</label>
+                                                <div class="btn-group w-100 mb-3 donation-amount-buttons" role="group">
+                                                    <input type="radio" class="btn-check" name="amount_preset" id="amount_25" value="25" autocomplete="off"/>
+                                                    <label class="btn btn-outline-primary" for="amount_25">$25</label>
+
+                                                    <input type="radio" class="btn-check" name="amount_preset" id="amount_50" value="50" autocomplete="off"/>
+                                                    <label class="btn btn-outline-primary" for="amount_50">$50</label>
+
+                                                    <input type="radio" class="btn-check" name="amount_preset" id="amount_100" value="100" autocomplete="off" checked="checked"/>
+                                                    <label class="btn btn-outline-primary" for="amount_100">$100</label>
+
+                                                    <input type="radio" class="btn-check" name="amount_preset" id="amount_custom" value="custom" autocomplete="off"/>
+                                                    <label class="btn btn-outline-primary" for="amount_custom">Custom</label>
+                                                </div>
+                                                <input type="number" name="amount" id="amount" class="form-control form-control-lg" 
+                                                       placeholder="Enter amount" min="1" step="0.01" value="100" required="required"/>
+                                            </div>
+
+                                            <!-- Recurring Donation -->
+                                            <div class="mb-4">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" id="is_recurring" name="is_recurring"/>
+                                                    <label class="form-check-label fw-bold" for="is_recurring">
+                                                        Make this a recurring donation
+                                                    </label>
+                                                </div>
+                                                <div id="recurring_options" class="mt-3" style="display: none;">
+                                                    <label class="form-label">Frequency</label>
+                                                    <select name="frequency" class="form-select">
+                                                        <option value="monthly" selected="selected">Monthly</option>
+                                                        <option value="quarterly">Quarterly</option>
+                                                        <option value="yearly">Yearly</option>
+                                                    </select>
+                                                    <small class="form-text text-muted">
+                                                        Your payment method will be securely saved for future donations.
+                                                    </small>
+                                                </div>
+                                            </div>
+
+                                            <!-- Donor Information -->
+                                            <h5 class="mb-3">Your Information</h5>
+                                            
+                                            <t t-if="user._is_public()">
+                                                <div class="mb-3">
+                                                    <label for="name" class="form-label">Full Name *</label>
+                                                    <input type="text" name="name" id="name" class="form-control" required="required"/>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="email" class="form-label">Email *</label>
+                                                    <input type="email" name="email" id="email" class="form-control" required="required"/>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="phone" class="form-label">Phone (Optional)</label>
+                                                    <input type="tel" name="phone" id="phone" class="form-control"/>
+                                                </div>
+                                            </t>
+                                            <t t-else="">
+                                                <div class="alert alert-info">
+                                                    Donating as: <strong><t t-esc="user.partner_id.name"/></strong> 
+                                                    (<t t-esc="user.partner_id.email"/>)
+                                                </div>
+                                            </t>
+
+                                            <!-- Purpose/Message -->
+                                            <div class="mb-3">
+                                                <label for="purpose" class="form-label">Message or Purpose (Optional)</label>
+                                                <textarea name="purpose" id="purpose" class="form-control" rows="3" 
+                                                          placeholder="Share why you're donating or leave a message..."></textarea>
+                                            </div>
+
+                                            <!-- Anonymous Option -->
+                                            <div class="mb-4">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="is_anonymous" name="is_anonymous"/>
+                                                    <label class="form-check-label" for="is_anonymous">
+                                                        Make my donation anonymous
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            <!-- Payment Provider Selection -->
+                                            <h5 class="mb-3">Payment Method</h5>
+                                            <div class="mb-4">
+                                                <t t-foreach="providers" t-as="provider">
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input" type="radio" name="provider_id" 
+                                                               t-att-id="'provider_%s' % provider.id" 
+                                                               t-att-value="provider.id" 
+                                                               t-att-checked="'checked' if provider_index == 0 else None"
+                                                               required="required"/>
+                                                        <label class="form-check-label" t-att-for="'provider_%s' % provider.id">
+                                                            <t t-esc="provider.name"/>
+                                                        </label>
+                                                    </div>
+                                                </t>
+                                            </div>
+
+                                            <!-- Save Payment Method (shown for recurring) -->
+                                            <div id="save_token_option" style="display: none;">
+                                                <div class="form-check mb-4">
+                                                    <input class="form-check-input" type="checkbox" id="save_token" 
+                                                           name="save_token" checked="checked"/>
+                                                    <label class="form-check-label" for="save_token">
+                                                        Securely save payment method for future donations
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            <!-- Submit Button -->
+                                            <div class="d-grid">
+                                                <button type="submit" class="btn btn-primary btn-lg">
+                                                    <i class="fa fa-heart me-2"></i> Donate Now
+                                                </button>
+                                            </div>
+
+                                            <p class="text-muted text-center mt-3 small">
+                                                Your donation is secure and processed through our trusted payment partners.
+                                            </p>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </t>
+    </template>
+
+    <!-- Payment Redirect Template -->
+    <template id="donation_payment_redirect" name="Donation Payment Processing">
+        <t t-call="website.layout">
+            <div id="wrap">
+                <div class="container py-5">
+                    <div class="row justify-content-center">
+                        <div class="col-lg-8 text-center">
+                            <h2 class="mb-4">Processing your donation</h2>
+                            <p class="lead" t-if="redirect_form_html">
+                                Please wait while we redirect you to the payment provider…
+                            </p>
+
+                            <!-- Redirect flow: auto-post HTML form from payment.transaction._get_processing_values() -->
+                            <t t-if="redirect_form_html">
+                                <div id="o_donation_payment_redirect" t-out="redirect_form_html"/>
+                                <script>
+                                    document.addEventListener('DOMContentLoaded', function () {
+                                        var root = document.getElementById('o_donation_payment_redirect');
+                                        if (!root) { return; }
+                                        var form = root.querySelector('form');
+                                        if (form) { form.submit(); }
+                                    });
+                                </script>
+                            </t>
+
+                            <!-- Demo provider: direct flow (no redirect form in Odoo 18) -->
+                            <t t-if="demo_direct">
+                                <p class="text-muted mb-4">
+                                    This is the test payment provider. Choose a simulated outcome, then confirm.
+                                </p>
+                                <form action="/donate/demo/pay" method="post" class="text-start mx-auto" style="max-width: 520px;">
+                                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                    <input type="hidden" name="tx_id" t-att-value="tx.id"/>
+                                    <div class="row g-2">
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label small" for="customer_input">Payment details (test)</label>
+                                            <input type="text" name="customer_input" id="customer_input" class="form-control"
+                                                   placeholder="XXXX XXXX XXXX XXXX"/>
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label small" for="simulated_state">Simulated result</label>
+                                            <select name="simulated_state" id="simulated_state" class="form-select">
+                                                <option value="done">Successful</option>
+                                                <option value="pending">Pending</option>
+                                                <option value="cancel">Cancelled</option>
+                                                <option value="error">Error</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="d-grid mt-4">
+                                        <button type="submit" class="btn btn-primary btn-lg">Pay now</button>
+                                    </div>
+                                </form>
+                            </t>
+
+                            <t t-if="not redirect_form_html and not demo_direct">
+                                <div class="alert alert-warning">
+                                    Payment could not be started for this provider configuration.
+                                    Please try another payment method or contact support.
+                                </div>
+                                <a href="/donate" class="btn btn-secondary">Back to donation form</a>
+                            </t>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- Donation Confirmation Page -->
+    <template id="donation_confirmation_page" name="Donation Confirmation">
+        <t t-call="website.layout">
+            <div id="wrap">
+                <div class="container py-5">
+                    <div class="row justify-content-center">
+                        <div class="col-lg-6 text-center">
+                            <div class="mb-4">
+                                <i class="fa fa-check-circle text-success" style="font-size: 72px;"></i>
+                            </div>
+                            <h1 class="mb-3">Thank You!</h1>
+                            <p class="lead">Your donation has been received.</p>
+                            
+                            <div class="card mt-4">
+                                <div class="card-body">
+                                    <h5 class="card-title">Donation Details</h5>
+                                    <table class="table table-borderless">
+                                        <tr>
+                                            <td class="text-end"><strong>Reference:</strong></td>
+                                            <td class="text-start"><t t-esc="donation.name"/></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-end"><strong>Amount:</strong></td>
+                                            <td class="text-start">
+                                                <t t-esc="donation.amount" t-options="{'widget': 'monetary', 'display_currency': donation.currency_id}"/>
+                                            </td>
+                                        </tr>
+                                        <tr t-if="donation.campaign_id">
+                                            <td class="text-end"><strong>Campaign:</strong></td>
+                                            <td class="text-start"><t t-esc="donation.campaign_id.name"/></td>
+                                        </tr>
+                                        <tr t-if="donation.category_id">
+                                            <td class="text-end"><strong>Category:</strong></td>
+                                            <td class="text-start"><t t-esc="donation.category_id.name"/></td>
+                                        </tr>
+                                        <tr t-if="donation.is_recurring">
+                                            <td class="text-end"><strong>Frequency:</strong></td>
+                                            <td class="text-start"><t t-esc="donation.frequency.title()"/></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="mt-4">
+                                <t t-if="not request.env.user._is_public()">
+                                    <a href="/my/donations" class="btn btn-primary">View My Donations</a>
+                                </t>
+                                <a href="/" class="btn btn-secondary">Return Home</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+</odoo>

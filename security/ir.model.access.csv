@@ -1,0 +1,16 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_donation_donation_manager,donation.donation.manager,model_donation_donation,group_donation_manager,1,1,1,1
+access_donation_donation_user,donation.donation.user,model_donation_donation,group_donation_user,1,0,0,0
+access_donation_donation_portal,donation.donation.portal,model_donation_donation,base.group_portal,1,0,0,0
+access_donation_donation_public,donation.donation.public,model_donation_donation,base.group_public,1,1,1,0
+access_donation_recurring_manager,donation.recurring.rule.manager,model_donation_recurring_rule,group_donation_manager,1,1,1,1
+access_donation_recurring_user,donation.recurring.rule.user,model_donation_recurring_rule,group_donation_user,1,0,0,0
+access_donation_recurring_portal,donation.recurring.rule.portal,model_donation_recurring_rule,base.group_portal,1,0,0,0
+access_donation_campaign_manager,donation.campaign.manager,model_donation_campaign,group_donation_manager,1,1,1,1
+access_donation_campaign_user,donation.campaign.user,model_donation_campaign,group_donation_user,1,0,0,0
+access_donation_campaign_portal,donation.campaign.portal,model_donation_campaign,base.group_portal,1,0,0,0
+access_donation_campaign_public,donation.campaign.public,model_donation_campaign,base.group_public,1,0,0,0
+access_donation_category_manager,donation.category.manager,model_donation_category,group_donation_manager,1,1,1,1
+access_donation_category_user,donation.category.user,model_donation_category,group_donation_user,1,0,0,0
+access_donation_category_public,donation.category.public,model_donation_category,base.group_public,1,0,0,0
+access_donation_category_portal,donation.category.portal,model_donation_category,base.group_portal,1,0,0,0

@@ -1,0 +1,407 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Actions referenced by form stat buttons (must load before those views) -->
+    <record id="action_donation_from_campaign" model="ir.actions.act_window">
+        <field name="name">Donations</field>
+        <field name="res_model">donation.donation</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('campaign_id', '=', active_id)]</field>
+        <field name="context">{'default_campaign_id': active_id}</field>
+    </record>
+
+    <record id="action_donation_from_recurring" model="ir.actions.act_window">
+        <field name="name">Generated Donations</field>
+        <field name="res_model">donation.donation</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('recurring_rule_id', '=', active_id)]</field>
+    </record>
+
+    <!-- Donation list View -->
+    <record id="view_donation_list" model="ir.ui.view">
+        <field name="name">donation.donation.list</field>
+        <field name="model">donation.donation</field>
+        <field name="arch" type="xml">
+            <list string="Donations" decoration-success="state=='confirmed'" decoration-muted="state=='cancelled'">
+                <field name="name"/>
+                <field name="date"/>
+                <field name="partner_id"/>
+                <field name="campaign_id" optional="show"/>
+                <field name="category_id" optional="show"/>
+                <field name="amount" sum="Total"/>
+                <field name="currency_id" column_invisible="1"/>
+                <field name="is_recurring" optional="hide"/>
+                <field name="payment_state" optional="show"/>
+                <field name="state" widget="badge" decoration-success="state=='confirmed'" decoration-warning="state=='pending'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Donation Form View -->
+    <record id="view_donation_form" model="ir.ui.view">
+        <field name="name">donation.donation.form</field>
+        <field name="model">donation.donation</field>
+        <field name="arch" type="xml">
+            <form string="Donation">
+                <header>
+                    <button name="action_confirm" string="Confirm" type="object" class="btn-primary"
+                            invisible="state not in ('draft', 'pending')"/>
+                    <button name="action_cancel" string="Cancel" type="object"
+                            invisible="state in ('confirmed', 'cancelled')"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,pending,confirmed"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box"/>
+                    <div class="oe_title">
+                        <label for="name" string="Reference"/>
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group name="donor_info" string="Donor">
+                            <field name="partner_id" widget="res_partner_many2one"
+                                   context="{'res_partner_search_mode': 'customer', 'show_address': 1}"/>
+                            <field name="date"/>
+                            <field name="is_anonymous"/>
+                        </group>
+                        <group name="donation_info" string="Donation">
+                            <field name="amount"/>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="campaign_id"/>
+                            <field name="category_id"/>
+                            <field name="tax_receipt_number" readonly="1"/>
+                        </group>
+                    </group>
+                    <group name="recurring_info" string="Recurring" invisible="not is_recurring">
+                        <group>
+                            <field name="is_recurring"/>
+                            <field name="frequency"/>
+                        </group>
+                        <group>
+                            <field name="recurring_rule_id" readonly="1"/>
+                            <field name="next_donation_date" invisible="recurring_rule_id"/>
+                        </group>
+                    </group>
+                    <group name="payment_info" string="Payment">
+                        <group>
+                            <field name="payment_transaction_id" readonly="1"/>
+                            <field name="payment_state" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="payment_token_id" readonly="1"/>
+                            <field name="invoice_id" readonly="1"/>
+                        </group>
+                    </group>
+                    <group name="purpose_group" string="Purpose / message">
+                        <field name="purpose" nolabel="1" placeholder="Optional message or purpose for this donation..."/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- Donation Search View -->
+    <record id="view_donation_search" model="ir.ui.view">
+        <field name="name">donation.donation.search</field>
+        <field name="model">donation.donation</field>
+        <field name="arch" type="xml">
+            <search string="Donations">
+                <field name="name" string="Reference"/>
+                <field name="partner_id" string="Donor"/>
+                <field name="campaign_id"/>
+                <field name="category_id"/>
+                <filter string="Confirmed" name="confirmed" domain="[('state', '=', 'confirmed')]"/>
+                <filter string="Pending" name="pending" domain="[('state', '=', 'pending')]"/>
+                <filter string="Recurring" name="recurring" domain="[('is_recurring', '=', True)]"/>
+                <separator/>
+                <filter string="Donation Date" name="date" date="date"/>
+                <group expand="0" string="Group By">
+                    <filter string="Donor" name="group_partner" context="{'group_by': 'partner_id'}"/>
+                    <filter string="Campaign" name="group_campaign" context="{'group_by': 'campaign_id'}"/>
+                    <filter string="Category" name="group_category" context="{'group_by': 'category_id'}"/>
+                    <filter string="State" name="group_state" context="{'group_by': 'state'}"/>
+                    <filter string="Date" name="group_date" context="{'group_by': 'date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Recurring rule search -->
+    <record id="view_recurring_rule_search" model="ir.ui.view">
+        <field name="name">donation.recurring.rule.search</field>
+        <field name="model">donation.recurring.rule</field>
+        <field name="arch" type="xml">
+            <search string="Recurring Donations">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="campaign_id"/>
+                <filter string="Active" name="active" domain="[('state', '=', 'active')]"/>
+                <filter string="Paused" name="paused" domain="[('state', '=', 'paused')]"/>
+                <filter string="Cancelled" name="cancelled" domain="[('state', '=', 'cancelled')]"/>
+                <separator/>
+                <filter string="Next date" name="next_date" date="next_donation_date"/>
+                <group expand="0" string="Group By">
+                    <filter string="Donor" name="group_partner" context="{'group_by': 'partner_id'}"/>
+                    <filter string="Frequency" name="group_frequency" context="{'group_by': 'frequency'}"/>
+                    <filter string="Status" name="group_state" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Recurring Rule list View -->
+    <record id="view_recurring_rule_list" model="ir.ui.view">
+        <field name="name">donation.recurring.rule.list</field>
+        <field name="model">donation.recurring.rule</field>
+        <field name="arch" type="xml">
+            <list string="Recurring Donations" decoration-success="state=='active'" decoration-muted="state=='cancelled'">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="amount" sum="Total Monthly Value"/>
+                <field name="currency_id" column_invisible="1"/>
+                <field name="frequency"/>
+                <field name="next_donation_date"/>
+                <field name="donation_count"/>
+                <field name="state" widget="badge" decoration-success="state=='active'" decoration-muted="state in ['paused','cancelled']"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Recurring Rule Form View -->
+    <record id="view_recurring_rule_form" model="ir.ui.view">
+        <field name="name">donation.recurring.rule.form</field>
+        <field name="model">donation.recurring.rule</field>
+        <field name="arch" type="xml">
+            <form string="Recurring Donation">
+                <header>
+                    <button name="action_pause" string="Pause" type="object" class="btn-warning"
+                            invisible="state != 'active'"/>
+                    <button name="action_resume" string="Resume" type="object" class="oe_highlight"
+                            invisible="state != 'paused'"/>
+                    <button name="action_deactivate" string="Cancel" type="object"
+                            invisible="state == 'cancelled'"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="%(action_donation_from_recurring)d" type="action" class="oe_stat_button" icon="fa-heart">
+                            <field name="donation_count" widget="statinfo" string="Donations"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="partner_id"/>
+                            <field name="amount"/>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="campaign_id"/>
+                            <field name="category_id"/>
+                        </group>
+                        <group>
+                            <field name="frequency"/>
+                            <field name="next_donation_date"/>
+                            <field name="payment_token_id" domain="[('partner_id', '=', partner_id)]"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="purpose" placeholder="Optional purpose or message..."/>
+                    </group>
+                    <notebook>
+                        <page string="Generated Donations" name="donations">
+                            <field name="donation_ids" readonly="1">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="date"/>
+                                    <field name="amount"/>
+                                    <field name="state"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- Campaign list View -->
+    <record id="view_campaign_list" model="ir.ui.view">
+        <field name="name">donation.campaign.list</field>
+        <field name="model">donation.campaign</field>
+        <field name="arch" type="xml">
+            <list string="Campaigns">
+                <field name="name"/>
+                <field name="start_date" optional="show"/>
+                <field name="end_date" optional="show"/>
+                <field name="donation_count"/>
+                <field name="total_raised" sum="Total raised"/>
+                <field name="goal_amount" optional="show"/>
+                <field name="progress_percentage" widget="progressbar" optional="hide"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Campaign search -->
+    <record id="view_campaign_search" model="ir.ui.view">
+        <field name="name">donation.campaign.search</field>
+        <field name="model">donation.campaign</field>
+        <field name="arch" type="xml">
+            <search string="Campaigns">
+                <field name="name"/>
+                <filter string="Archived" name="inactive" domain="[('active', '=', False)]"/>
+                <filter string="Active" name="active" domain="[('active', '=', True)]"/>
+                <separator/>
+                <filter string="End date" name="end_date" date="end_date"/>
+                <group expand="0" string="Group By">
+                    <filter string="Start date" name="group_start" context="{'group_by': 'start_date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Campaign Form View -->
+    <record id="view_campaign_form" model="ir.ui.view">
+        <field name="name">donation.campaign.form</field>
+        <field name="model">donation.campaign</field>
+        <field name="arch" type="xml">
+            <form string="Campaign">
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="%(action_donation_from_campaign)d" type="action" class="oe_stat_button" icon="fa-heart">
+                            <field name="donation_count" widget="statinfo" string="Donations"/>
+                        </button>
+                    </div>
+                    <widget name="web_ribbon" title="Archived" bg_color="text-bg-danger" invisible="active"/>
+                    <field name="active" invisible="1"/>
+                    <field name="currency_id" invisible="1"/>
+                    <div class="oe_title">
+                        <label for="name" string="Campaign name"/>
+                        <h1>
+                            <field name="name" placeholder="e.g. Annual fund drive"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Schedule">
+                            <field name="start_date"/>
+                            <field name="end_date"/>
+                        </group>
+                        <group string="Goal">
+                            <field name="goal_amount"/>
+                            <field name="total_raised" readonly="1"/>
+                            <field name="progress_percentage" widget="progressbar" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Description" name="description">
+                            <field name="description" widget="html" nolabel="1"/>
+                        </page>
+                        <page string="Donations" name="donations">
+                            <field name="donation_ids" readonly="1" nolabel="1">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="partner_id"/>
+                                    <field name="date"/>
+                                    <field name="amount"/>
+                                    <field name="state" widget="badge"
+                                           decoration-success="state == 'confirmed'"
+                                           decoration-warning="state == 'pending'"
+                                           decoration-muted="state == 'cancelled'"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- Donation categories -->
+    <record id="view_donation_category_list" model="ir.ui.view">
+        <field name="name">donation.category.list</field>
+        <field name="model">donation.category</field>
+        <field name="arch" type="xml">
+            <list string="Donation Categories">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="account_id"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_donation_category_form" model="ir.ui.view">
+        <field name="name">donation.category.form</field>
+        <field name="model">donation.category</field>
+        <field name="arch" type="xml">
+            <form string="Donation Category">
+                <sheet>
+                    <widget name="web_ribbon" title="Archived" bg_color="text-bg-danger" invisible="active"/>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="sequence"/>
+                            <field name="active" invisible="1"/>
+                        </group>
+                        <group>
+                            <field name="account_id"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="description" placeholder="Optional description shown internally..."/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_donation_category" model="ir.actions.act_window">
+        <field name="name">Donation Categories</field>
+        <field name="res_model">donation.category</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- Actions -->
+    <record id="action_donation" model="ir.actions.act_window">
+        <field name="name">Donations</field>
+        <field name="res_model">donation.donation</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_confirmed': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create your first donation
+            </p>
+        </field>
+    </record>
+
+    <record id="action_recurring_rule" model="ir.actions.act_window">
+        <field name="name">Recurring Donations</field>
+        <field name="res_model">donation.recurring.rule</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_active': 1}</field>
+    </record>
+
+    <record id="action_campaign" model="ir.actions.act_window">
+        <field name="name">Campaigns</field>
+        <field name="res_model">donation.campaign</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- Menu Items -->
+    <menuitem id="menu_donation_root" name="Donations" sequence="10" web_icon="donation_management,static/description/icon.png"/>
+    
+    <menuitem id="menu_donation_donations" name="Donations" parent="menu_donation_root" sequence="10"/>
+    <menuitem id="menu_donation_all" name="All Donations" parent="menu_donation_donations" action="action_donation" sequence="10"/>
+    <menuitem id="menu_donation_recurring" name="Recurring Donations" parent="menu_donation_donations" action="action_recurring_rule" sequence="20"/>
+    
+    <menuitem id="menu_donation_configuration" name="Configuration" parent="menu_donation_root" sequence="100"/>
+    <menuitem id="menu_donation_campaigns" name="Campaigns" parent="menu_donation_configuration" action="action_campaign" sequence="10"/>
+    <menuitem id="menu_donation_categories" name="Donation Categories" parent="menu_donation_configuration" action="action_donation_category" sequence="15"/>
+
+</odoo>

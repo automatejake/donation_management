@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Sequences -->
+    <record id="seq_donation" model="ir.sequence">
+        <field name="name">Donation Sequence</field>
+        <field name="code">donation.donation</field>
+        <field name="prefix">DON</field>
+        <field name="padding">5</field>
+        <field name="company_id" eval="False"/>
+    </record>
+
+    <record id="seq_recurring_rule" model="ir.sequence">
+        <field name="name">Recurring Donation Rule Sequence</field>
+        <field name="code">donation.recurring.rule</field>
+        <field name="prefix">REC</field>
+        <field name="padding">5</field>
+        <field name="company_id" eval="False"/>
+    </record>
+
+    <record id="seq_tax_receipt" model="ir.sequence">
+        <field name="name">Tax Receipt Sequence</field>
+        <field name="code">donation.tax.receipt</field>
+        <field name="prefix">TR</field>
+        <field name="padding">6</field>
+        <field name="company_id" eval="False"/>
+    </record>
+
+    <!-- Donation Product (for accounting) -->
+    <record id="product_donation" model="product.product">
+        <field name="name">Donation</field>
+        <field name="type">service</field>
+        <field name="list_price">0.0</field>
+        <!-- <field name="invoicing_policy">order</field> -->
+        <field name="taxes_id" eval="[(5, 0, 0)]"/>
+        <field name="description">General donation product for accounting purposes</field>
+    </record>
+
+</odoo>

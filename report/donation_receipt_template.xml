@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Email Template: Donation Confirmation -->
+    <record id="email_template_donation_confirmation" model="mail.template">
+        <field name="name">Donation: Confirmation</field>
+        <field name="model_id" ref="model_donation_donation"/>
+        <field name="subject">Thank You for Your Donation - {{ object.name }}</field>
+        <field name="email_from">{{ (object.company_id.email or user.company_id.email or user.email) }}</field>
+        <field name="email_to">{{ object.partner_id.email }}</field>
+        <field name="body_html" type="html">
+<div style="margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #333333;">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f4f4;">
+        <tr>
+            <td align="center" style="padding: 40px 0;">
+                <table border="0" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
+                            <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Thank You! ❤️</h1>
+                        </td>
+                    </tr>
+                    
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px 30px;">
+                            <p style="font-size: 16px; line-height: 24px; margin: 0 0 20px;">
+                                Dear <strong>{{ object.partner_id.name }}</strong>,
+                            </p>
+                            
+                            <p style="font-size: 16px; line-height: 24px; margin: 0 0 20px;">
+                                Thank you for your generous donation! Your support makes a real difference in our mission.
+                            </p>
+                            
+                            <!-- Donation Details Box -->
+                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8f9fa; border-radius: 6px; margin: 30px 0;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <h3 style="color: #667eea; margin: 0 0 15px; font-size: 18px;">Donation Details</h3>
+                                        <table border="0" cellpadding="5" cellspacing="0" width="100%">
+                                            <tr>
+                                                <td style="color: #666666; width: 40%;">Reference:</td>
+                                                <td><strong>{{ object.name }}</strong></td>
+                                            </tr>
+                                            <tr>
+                                                <td style="color: #666666;">Date:</td>
+                                                <td><strong>{{ format_datetime(object.date, dt_format='medium') }}</strong></td>
+                                            </tr>
+                                            <tr>
+                                                <td style="color: #666666;">Amount:</td>
+                                                <td><strong style="color: #28a745; font-size: 18px;">{{ format_amount(object.amount, object.currency_id) }}</strong></td>
+                                            </tr>
+                                            <t t-if="object.campaign_id">
+                                                <tr>
+                                                    <td style="color: #666666;">Campaign:</td>
+                                                    <td><strong>{{ object.campaign_id.name }}</strong></td>
+                                                </tr>
+                                            </t>
+                                            <t t-if="object.is_recurring">
+                                                <tr>
+                                                    <td style="color: #666666;">Type:</td>
+                                                    <td><strong>Recurring ({{ object.frequency.title() }})</strong></td>
+                                                </tr>
+                                            </t>
+                                            <t t-if="object.tax_receipt_number">
+                                                <tr>
+                                                    <td style="color: #666666;">Tax Receipt:</td>
+                                                    <td><strong>{{ object.tax_receipt_number }}</strong></td>
+                                                </tr>
+                                            </t>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                            <t t-if="object.is_recurring">
+                                <p style="font-size: 14px; line-height: 22px; margin: 20px 0; padding: 15px; background-color: #e7f3ff; border-left: 4px solid #0066cc; border-radius: 4px;">
+                                    <strong>Recurring Donation:</strong> Your {{ object.frequency }} donation of {{ format_amount(object.amount, object.currency_id) }} 
+                                    will be automatically processed using your saved payment method. You can manage your recurring donations anytime from your account portal.
+                                </p>
+                            </t>
+                            
+                            <p style="font-size: 16px; line-height: 24px; margin: 20px 0;">
+                                Your generosity helps us continue our important work. If you have any questions about your donation, please don't hesitate to contact us.
+                            </p>
+                            
+                            <!-- CTA Button -->
+                            <div style="text-align: center; margin: 30px 0;">
+                                <a href="{{ ctx.get('base_url') }}/my/donations/{{ object.id }}" 
+                                   style="display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                                    View Donation Details
+                                </a>
+                            </div>
+                            
+                            <p style="font-size: 14px; line-height: 22px; color: #666666; margin: 30px 0 0; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+                                With gratitude,<br/>
+                                <strong>{{ object.company_id.name or user.company_id.name }}</strong>
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f8f9fa; padding: 20px 30px; text-align: center;">
+                            <p style="font-size: 12px; color: #999999; margin: 0;">
+                                This is an automated confirmation of your donation.<br/>
+                                Please keep this email for your records.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</div>
+        </field>
+    </record>
+
+    <!-- Email Template: Recurring Payment Failed -->
+    <record id="email_template_recurring_payment_failed" model="mail.template">
+        <field name="name">Donation: Recurring Payment Failed</field>
+        <field name="model_id" ref="model_donation_recurring_rule"/>
+        <field name="subject">Action Required: Recurring Donation Payment Failed</field>
+        <field name="email_from">{{ (object.company_id.email or user.company_id.email or user.email) }}</field>
+        <field name="email_to">{{ object.partner_id.email }}</field>
+        <field name="body_html" type="html">
+<div style="margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #333333;">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f4f4;">
+        <tr>
+            <td align="center" style="padding: 40px 0;">
+                <table border="0" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <tr>
+                        <td style="background-color: #dc3545; padding: 40px 30px; text-align: center;">
+                            <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Payment Issue with Your Recurring Donation</h1>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 40px 30px;">
+                            <p style="font-size: 16px; line-height: 24px; margin: 0 0 20px;">
+                                Dear <strong>{{ object.partner_id.name }}</strong>,
+                            </p>
+                            
+                            <p style="font-size: 16px; line-height: 24px; margin: 0 0 20px;">
+                                We attempted to process your recurring donation of <strong>{{ format_amount(object.amount, object.currency_id) }}</strong>, 
+                                but the payment could not be completed.
+                            </p>
+                            
+                            <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                                <p style="margin: 0; font-size: 14px; line-height: 22px;">
+                                    <strong>Common reasons for payment failure:</strong><br/>
+                                    • Expired payment method<br/>
+                                    • Insufficient funds<br/>
+                                    • Card limit reached<br/>
+                                    • Payment method changed by your bank
+                                </p>
+                            </div>
+                            
+                            <p style="font-size: 16px; line-height: 24px; margin: 20px 0;">
+                                To continue supporting our mission, please update your payment method or make a one-time donation.
+                            </p>
+                            
+                            <div style="text-align: center; margin: 30px 0;">
+                                <a href="{{ ctx.get('base_url') }}/my/donations" 
+                                   style="display: inline-block; padding: 14px 28px; background-color: #28a745; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                                    Update Payment Method
+                                </a>
+                            </div>
+                            
+                            <p style="font-size: 14px; line-height: 22px; color: #666666; margin: 30px 0 0;">
+                                If you have questions or need assistance, please contact us.<br/><br/>
+                                Thank you for your continued support!
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</div>
+        </field>
+    </record>
+
+</odoo>
