@@ -8,8 +8,6 @@
         <field name="code">model.action_process_recurring_donations()</field>
         <field name="interval_number">1</field>
         <field name="interval_type">days</field>
-        <field name="numbercall">-1</field>
         <field name="active" eval="True"/>
-        <field name="doall" eval="False"/>
     </record>
 </odoo>

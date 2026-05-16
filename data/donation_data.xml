@@ -35,4 +35,9 @@
         <field name="description">General donation product for accounting purposes</field>
     </record>
 
+    <record id="donation_fee_coverage_percent" model="ir.config_parameter">
+        <field name="key">donation_management.fee_coverage_percent</field>
+        <field name="value">3.0</field>
+    </record>
+
 </odoo>

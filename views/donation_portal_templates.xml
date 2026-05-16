@@ -243,7 +243,11 @@
                                         <div class="col-sm-4 text-muted">Type:</div>
                                         <div class="col-sm-8">
                                             <span class="badge bg-info">
-                                                <i class="fa fa-refresh"></i> Recurring (<t t-esc="donation.frequency.title()"/>)
+                                                <i class="fa fa-refresh"></i>
+                                                <t t-if="donation.frequency == 'weekly'">Weekly</t>
+                                                <t t-elif="donation.frequency == 'biweekly'">Bi-weekly</t>
+                                                <t t-elif="donation.frequency == 'monthly'">Monthly</t>
+                                                <t t-else="">Recurring</t>
                                             </span>
                                         </div>
                                     </div>

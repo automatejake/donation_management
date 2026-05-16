@@ -1,48 +1,37 @@
 # -*- coding: utf-8 -*-
-from odoo import models, api
+from odoo import models
+from odoo.addons.payment.models.payment_transaction import PaymentTransaction as PaymentTransactionBase
 
 
 class DonationPayment(models.Model):
     _inherit = 'donation.donation'
 
     def _process_token_payment(self):
-        """Process payment using saved payment token"""
         self.ensure_one()
-        
         if not self.payment_token_id:
             return False
-        
-        # Create payment transaction
-        tx_values = self._prepare_payment_transaction_values()
-        
-        tx = self.env['payment.transaction'].create(tx_values)
+
+        tx = self.env['payment.transaction'].create(self._prepare_payment_transaction_values())
         self.payment_transaction_id = tx.id
-        
-        # Process the transaction using the token
+
         try:
             tx._send_payment_request()
-            
-            # Check if payment was successful
             if tx.state == 'done':
-                self.action_confirm()
+                tx._post_process()
                 return True
-            elif tx.state == 'pending':
+            if tx.state == 'pending':
                 self.state = 'pending'
                 return True
-            else:
-                return False
-                
+            return False
         except Exception as e:
             self.message_post(
                 body=f"Payment processing failed: {str(e)}",
-                subject="Payment Error"
+                subject="Payment Error",
             )
             return False
 
     def _prepare_payment_transaction_values(self):
-        """Prepare values for payment transaction"""
         self.ensure_one()
-        
         return {
             'provider_id': self.payment_token_id.provider_id.id,
             'payment_method_id': self.payment_token_id.payment_method_id.id,
@@ -51,46 +40,51 @@ class DonationPayment(models.Model):
             'currency_id': self.currency_id.id,
             'partner_id': self.partner_id.id,
             'token_id': self.payment_token_id.id,
-            'operation': 'offline',
-            # 'callback_model_id': self.env['ir.model']._get('donation.donation').id,
-            'callback_res_id': self.id,
-            'callback_method': '_handle_payment_transaction_callback',
+            'operation': 'online_token',
         }
 
-    def _handle_payment_transaction_callback(self, **kwargs):
-        """Handle callback from payment transaction"""
+    def _finalize_after_payment(self, tx):
+        """After online payment: charge now, save card for later, or one-time."""
         self.ensure_one()
-        
-        tx = self.payment_transaction_id
-        
-        if tx.state == 'done':
-            if self.state != 'confirmed':
-                self.action_confirm()
-        elif tx.state == 'cancel':
-            self.state = 'cancelled'
-        elif tx.state == 'error':
-            self.state = 'draft'
-            self.message_post(
-                body="Payment failed. Please try again or contact support.",
-                subject="Payment Error"
-            )
+        if tx.token_id:
+            self.payment_token_id = tx.token_id.id
+
+        if self._is_recurring_signup():
+            if self._recurring_starts_later():
+                self._finalize_recurring_setup()
+            else:
+                self._finalize_recurring_with_first_charge()
+            return
+
+        self._complete_donation()
 
 
 class PaymentTransaction(models.Model):
     _inherit = 'payment.transaction'
 
-    def _reconcile_after_done(self):
-        """Override to handle donation reconciliation"""
-        res = super()._reconcile_after_done()
-        
-        # Handle donation-specific logic
-        for tx in self:
-            donations = self.env['donation.donation'].search([
-                ('payment_transaction_id', '=', tx.id),
-                ('state', '!=', 'confirmed')
-            ])
-            
-            for donation in donations:
-                donation.action_confirm()
-        
-        return res
+    def _post_process(self):
+        """Donation payments: post receipts/revenue entry only (no invoice, no AR payment)."""
+        donations = self.env['donation.donation'].search([
+            ('payment_transaction_id', 'in', self.ids),
+        ])
+        donations_by_tx = {}
+        for donation in donations:
+            donations_by_tx.setdefault(donation.payment_transaction_id.id, donation)
+
+        donation_txs = self.filtered(lambda t: t.id in donations_by_tx)
+        other_txs = self - donation_txs
+
+        if other_txs:
+            super()._post_process(other_txs)
+
+        for tx in donation_txs:
+            PaymentTransactionBase._post_process(tx)
+            donation = donations_by_tx.get(tx.id)
+            if not donation:
+                continue
+            if tx.state == 'done':
+                donation._finalize_after_payment(tx)
+            elif tx.state == 'cancel':
+                donation.action_cancel()
+            elif tx.state == 'error' and donation.state == 'pending':
+                donation.write({'state': 'draft'})

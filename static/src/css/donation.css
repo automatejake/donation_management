@@ -1,10 +1,5 @@
 /* Donation Management Styles */
 
-/* .s_donation_form {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    min-height: 100vh;
-} */
-
 .s_donation_form h1 {
     color: white;
     font-weight: 700;
@@ -15,28 +10,161 @@
     border-radius: 15px;
 }
 
-.donation-amount-buttons .btn {
-    font-weight: 600;
-    padding: 12px;
+/* —— Donation amount (featured, compact, large type) —— */
+.donation-amount-section {
+    padding: 1.25rem 1.35rem 1.1rem;
+    background: linear-gradient(145deg, #f8f9fe 0%, #f0f3fb 100%);
+    border: 1px solid #e4e8f4;
+    border-radius: 12px;
 }
 
-.donation-amount-buttons .btn-check:checked + .btn {
+.donation-amount-heading {
+    display: block;
+    margin-bottom: 0.65rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #5c6370;
+}
+
+.donation-amount-box {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.2rem;
+    max-width: 100%;
+    padding: 0.15rem 0;
+    border-bottom: 2px solid #c5cce0;
+    transition: border-color 0.2s ease;
+}
+
+.donation-amount-box:focus-within {
+    border-bottom-color: #667eea;
+}
+
+.donation-amount-symbol,
+.donation-amount-input {
+    font-size: 2.25rem;
+    font-weight: 700;
+    line-height: 1.15;
+}
+
+.donation-amount-symbol {
+    flex-shrink: 0;
+    color: #667eea;
+    user-select: none;
+}
+
+.donation-amount-input {
+    width: 4ch;
+    min-width: 2.5ch;
+    max-width: 14ch;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+    font-variant-numeric: tabular-nums;
+    color: #212529;
+    outline: none;
+    box-shadow: none;
+    -moz-appearance: textfield;
+}
+
+.donation-amount-input::-webkit-outer-spin-button,
+.donation-amount-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.donation-amount-input::placeholder {
+    color: #adb5bd;
+    font-weight: 600;
+}
+
+.donation-amount-input:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+.donation-amount-hint {
+    margin-top: 0.65rem;
+    font-size: 0.8125rem;
+    color: #868e96;
+}
+
+/* Payment method selection */
+.donation-payment-section-label {
+    margin-bottom: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #6c757d;
+}
+
+.donation-payment-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+    padding: 0.85rem 1rem;
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.donation-payment-option:hover {
+    border-color: #c5cce0;
+    background-color: #f8f9fe;
+}
+
+.donation-payment-option-input {
+    margin-top: 0.35rem;
+    flex-shrink: 0;
+}
+
+.donation-payment-option:has(.donation-payment-option-input:checked) {
+    border-color: #667eea;
+    background-color: #f0f3ff;
+    box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.15);
+}
+
+.donation-payment-option-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.donation-payment-option-title {
+    font-weight: 600;
+    color: #212529;
+}
+
+.donation-payment-option-meta {
+    font-size: 0.8125rem;
+    color: #6c757d;
+}
+
+.donation-provider-logo {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    border-radius: 4px;
+}
+
+/* Schedule buttons */
+.donation-schedule-buttons .btn {
+    font-weight: 600;
+    padding: 12px;
+    flex: 1 1 auto;
+}
+
+.donation-schedule-buttons .btn-check:checked + .btn {
     background-color: #667eea;
     border-color: #667eea;
     color: white;
-}
-
-.donation-form #amount {
-    text-align: center;
-    font-size: 1.5rem;
-    font-weight: 700;
-    border: 2px solid #dee2e6;
-    transition: border-color 0.3s;
-}
-
-.donation-form #amount:focus {
-    border-color: #667eea;
-    box-shadow: 0 0 0 0.25rem rgba(102, 126, 234, 0.25);
 }
 
 .donation-form .btn-primary {
@@ -52,7 +180,7 @@
     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
-/* Portal Styles */
+/* Portal */
 .o_portal_donation_card {
     transition: transform 0.2s, box-shadow 0.2s;
 }
@@ -62,12 +190,10 @@
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
 }
 
-/* Recurring Donation Badge */
 .badge.bg-info {
     background-color: #17a2b8 !important;
 }
 
-/* Animation for confirmation */
 @keyframes fadeInUp {
     from {
         opacity: 0;
@@ -83,13 +209,17 @@
     animation: fadeInUp 0.6s ease-out;
 }
 
-/* Responsive adjustments */
 @media (max-width: 768px) {
-    .donation-amount-buttons {
+    .donation-amount-symbol,
+    .donation-amount-input {
+        font-size: 2rem;
+    }
+
+    .donation-schedule-buttons {
         flex-direction: column;
     }
-    
-    .donation-amount-buttons .btn {
+
+    .donation-schedule-buttons .btn {
         width: 100%;
         margin-bottom: 8px;
     }

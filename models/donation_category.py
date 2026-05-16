@@ -15,6 +15,6 @@ class DonationCategory(models.Model):
         string='Income Account',
         required=True,
         domain="[('deprecated', '=', False)]",
-        help='Receivable line on the customer invoice uses this account for the donation amount.',
+        help='Revenue account credited when the donation payment is received.',
     )
     description = fields.Text(string='Description', translate=True)

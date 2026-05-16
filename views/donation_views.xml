@@ -29,8 +29,7 @@
                 <field name="category_id" optional="show"/>
                 <field name="amount" sum="Total"/>
                 <field name="currency_id" column_invisible="1"/>
-                <field name="is_recurring" optional="hide"/>
-                <field name="payment_state" optional="show"/>
+                <field name="frequency" optional="show"/>
                 <field name="state" widget="badge" decoration-success="state=='confirmed'" decoration-warning="state=='pending'"/>
             </list>
         </field>
@@ -43,11 +42,9 @@
         <field name="arch" type="xml">
             <form string="Donation">
                 <header>
-                    <button name="action_confirm" string="Confirm" type="object" class="btn-primary"
-                            invisible="state not in ('draft', 'pending')"/>
                     <button name="action_cancel" string="Cancel" type="object"
                             invisible="state in ('confirmed', 'cancelled')"/>
-                    <field name="state" widget="statusbar" statusbar_visible="draft,pending,confirmed"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,pending,scheduled,confirmed"/>
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box"/>
@@ -62,34 +59,38 @@
                             <field name="partner_id" widget="res_partner_many2one"
                                    context="{'res_partner_search_mode': 'customer', 'show_address': 1}"/>
                             <field name="date"/>
-                            <field name="is_anonymous"/>
                         </group>
                         <group name="donation_info" string="Donation">
                             <field name="amount"/>
+                            <field name="base_amount" readonly="1"/>
+                            <field name="cover_fees" readonly="1"/>
+                            <field name="fee_amount" readonly="1"/>
                             <field name="currency_id" invisible="1"/>
                             <field name="campaign_id"/>
                             <field name="category_id"/>
                             <field name="tax_receipt_number" readonly="1"/>
                         </group>
                     </group>
-                    <group name="recurring_info" string="Recurring" invisible="not is_recurring">
+                    <group name="schedule_info" string="Schedule">
                         <group>
-                            <field name="is_recurring"/>
                             <field name="frequency"/>
+                            <field name="recurring_start_date" invisible="frequency == 'one_time'"/>
                         </group>
                         <group>
                             <field name="recurring_rule_id" readonly="1"/>
-                            <field name="next_donation_date" invisible="recurring_rule_id"/>
+                            <field name="next_donation_date"/>
                         </group>
                     </group>
-                    <group name="payment_info" string="Payment">
+                    <group name="payment_info" string="Accounting">
                         <group>
-                            <field name="payment_transaction_id" readonly="1"/>
-                            <field name="payment_state" readonly="1"/>
+                            <field name="journal_id"
+                                   readonly="payment_transaction_id"
+                                   required="not payment_transaction_id"/>
+                            <field name="account_move_id" readonly="1"/>
                         </group>
                         <group>
+                            <field name="payment_transaction_id" readonly="1"/>
                             <field name="payment_token_id" readonly="1"/>
-                            <field name="invoice_id" readonly="1"/>
                         </group>
                     </group>
                     <group name="purpose_group" string="Purpose / message">
@@ -113,7 +114,7 @@
                 <field name="category_id"/>
                 <filter string="Confirmed" name="confirmed" domain="[('state', '=', 'confirmed')]"/>
                 <filter string="Pending" name="pending" domain="[('state', '=', 'pending')]"/>
-                <filter string="Recurring" name="recurring" domain="[('is_recurring', '=', True)]"/>
+                <filter string="Recurring" name="recurring" domain="[('frequency', '!=', 'one_time')]"/>
                 <separator/>
                 <filter string="Donation Date" name="date" date="date"/>
                 <group expand="0" string="Group By">
@@ -372,7 +373,7 @@
         <field name="name">Donations</field>
         <field name="res_model">donation.donation</field>
         <field name="view_mode">list,form</field>
-        <field name="context">{'search_default_confirmed': 1}</field>
+        <field name="context">{'search_default_confirmed': 1, 'default_frequency': 'one_time'}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 Create your first donation
