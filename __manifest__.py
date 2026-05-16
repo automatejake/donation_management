@@ -33,6 +33,7 @@
         'views/donation_portal_templates.xml',
         'views/donation_website_templates.xml',
         'report/donation_receipt_template.xml',
+        'report/donation_portal_report.xml',
     ],
     'assets': {
         'web.assets_frontend': [

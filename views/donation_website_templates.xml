@@ -65,7 +65,6 @@
                                                         <option t-att-value="cat.id"><t t-esc="cat.name"/></option>
                                                     </t>
                                                 </select>
-                                                <small class="form-text text-muted">Categories are used for accounting and reporting.</small>
                                             </div>
 
                                             <!-- Campaign -->

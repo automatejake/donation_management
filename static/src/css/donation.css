@@ -201,7 +201,131 @@
     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
-/* Portal */
+/* Portal — /my/donations */
+.o_portal_donation_section {
+    border: 1px solid #e4e8f4;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.o_portal_donation_section_header {
+    background: linear-gradient(145deg, #f8f9fe 0%, #f0f3fb 100%);
+    border-bottom: 1px solid #e4e8f4;
+    padding: 1rem 1.25rem;
+}
+
+.o_portal_donation_section_header h4 {
+    font-weight: 700;
+    color: #212529;
+}
+
+.o_portal_donation_history_card .card-header {
+    border-bottom: none;
+}
+
+.o_portal_donation_history_toolbar {
+    padding: 0 1.25rem 1rem;
+    margin: 0;
+    border-bottom: 1px solid #e9ecef;
+    background: #fafbfe;
+}
+
+.o_portal_donation_history_toolbar-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.o_portal_donation_history_filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem 1rem;
+}
+
+.o_portal_donation_filter_field .form-label {
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #6c757d;
+}
+
+.o_portal_donation_filter_field .form-select {
+    min-width: 8.5rem;
+}
+
+.o_portal_donation_filter_actions .btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    font-weight: 600;
+    padding: 0.35rem 1rem;
+}
+
+.o_portal_donation_history_exports {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.o_portal_donation_history_summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed #dee2e6;
+}
+
+.o_portal_donation_period_badge {
+    display: inline-block;
+    padding: 0.2rem 0.65rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #4c51bf;
+    background: #eef0ff;
+    border-radius: 999px;
+}
+
+.o_portal_donate_btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    font-weight: 600;
+}
+
+.o_portal_donate_btn:hover {
+    filter: brightness(1.05);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+}
+
+.o_portal_donation_table thead th {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #6c757d;
+    border-bottom-width: 1px;
+}
+
+.o_portal_donation_table tbody tr:hover {
+    background-color: #f8f9fe;
+}
+
+.o_portal_donation_hint {
+    padding-top: 0.75rem;
+    border-top: 1px dashed #e9ecef;
+}
+
+.o_portal_donation_empty_icon {
+    font-size: 3.5rem;
+    color: #dee2e6;
+}
+
 .o_portal_donation_card {
     transition: transform 0.2s, box-shadow 0.2s;
 }
@@ -243,5 +367,31 @@
     .donation-schedule-buttons .btn {
         width: 100%;
         margin-bottom: 8px;
+    }
+
+    .o_portal_donation_history_toolbar-inner {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .o_portal_donation_history_filters,
+    .o_portal_donation_history_exports {
+        width: 100%;
+    }
+
+    .o_portal_donation_filter_field .form-select {
+        width: 100%;
+    }
+
+    .o_portal_donation_filter_actions .btn {
+        width: 100%;
+    }
+
+    .o_portal_donation_history_exports {
+        justify-content: stretch;
+    }
+
+    .o_portal_donation_history_exports .btn {
+        flex: 1 1 auto;
     }
 }

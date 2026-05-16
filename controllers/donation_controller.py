@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
+import csv
+import io
+import re
+from calendar import monthrange
+from datetime import datetime
+
 from markupsafe import Markup
+from werkzeug.urls import url_encode
 
 from odoo import http, fields, _
 from odoo.http import request
@@ -434,6 +441,101 @@ class DonationWebsiteController(http.Controller):
 
 class DonationPortal(CustomerPortal):
 
+    _DONATION_MONTHS = (
+        (1, 'January'), (2, 'February'), (3, 'March'), (4, 'April'),
+        (5, 'May'), (6, 'June'), (7, 'July'), (8, 'August'),
+        (9, 'September'), (10, 'October'), (11, 'November'), (12, 'December'),
+    )
+
+    def _donation_portal_base_domain(self, partner):
+        return [
+            ('partner_id', '=', partner.id),
+            ('state', '=', 'confirmed'),
+        ]
+
+    def _donation_portal_date_domain(self, filter_year=None, filter_month=None):
+        if not filter_year:
+            return []
+        try:
+            year = int(filter_year)
+        except (TypeError, ValueError):
+            return []
+        if filter_month:
+            try:
+                month = int(filter_month)
+            except (TypeError, ValueError):
+                month = None
+        else:
+            month = None
+        if month and 1 <= month <= 12:
+            last_day = monthrange(year, month)[1]
+            date_begin = datetime(year, month, 1, 0, 0, 0)
+            date_end = datetime(year, month, last_day, 23, 59, 59)
+        else:
+            date_begin = datetime(year, 1, 1, 0, 0, 0)
+            date_end = datetime(year, 12, 31, 23, 59, 59)
+        return [('date', '>=', date_begin), ('date', '<=', date_end)]
+
+    def _get_available_donation_years(self, partner):
+        Donation = request.env['donation.donation'].sudo()
+        dates = Donation.search(self._donation_portal_base_domain(partner)).mapped('date')
+        years = sorted(
+            {fields.Datetime.to_datetime(d).year for d in dates if d},
+            reverse=True,
+        )
+        if not years:
+            years = [fields.Date.today().year]
+        return years
+
+    def _donation_period_label(self, filter_year=None, filter_month=None):
+        if not filter_year:
+            return _('All time')
+        try:
+            year = int(filter_year)
+        except (TypeError, ValueError):
+            return _('All time')
+        if filter_month:
+            try:
+                month = int(filter_month)
+                if 1 <= month <= 12:
+                    month_name = dict(self._DONATION_MONTHS).get(month, str(month))
+                    return f'{month_name} {year}'
+            except (TypeError, ValueError):
+                pass
+        return str(year)
+
+    def _donation_portal_filter_args(self, sortby, filter_year, filter_month):
+        return {
+            'sortby': sortby,
+            'filter_year': filter_year or '',
+            'filter_month': filter_month or '',
+        }
+
+    def _prepare_donation_history(self, partner, sortby=None, filter_year=None, filter_month=None):
+        Donation = request.env['donation.donation'].sudo()
+        domain = self._donation_portal_base_domain(partner) + self._donation_portal_date_domain(
+            filter_year, filter_month,
+        )
+        searchbar_sortings = {
+            'date': {'label': _('Date'), 'order': 'date desc'},
+            'amount': {'label': _('Amount'), 'order': 'amount desc'},
+            'name': {'label': _('Reference'), 'order': 'name'},
+        }
+        if not sortby or sortby not in searchbar_sortings:
+            sortby = 'date'
+        return {
+            'domain': domain,
+            'order': searchbar_sortings[sortby]['order'],
+            'searchbar_sortings': searchbar_sortings,
+            'sortby': sortby,
+            'filter_year': filter_year,
+            'filter_month': filter_month,
+            'available_years': self._get_available_donation_years(partner),
+            'donation_months': self._DONATION_MONTHS,
+            'period_label': self._donation_period_label(filter_year, filter_month),
+            'Donation': Donation,
+        }
+
     def _prepare_home_portal_values(self, counters):
         values = super()._prepare_home_portal_values(counters)
         if 'donation_count' in counters:
@@ -450,55 +552,123 @@ class DonationPortal(CustomerPortal):
         return values
 
     @http.route(['/my/donations', '/my/donations/page/<int:page>'], type='http', auth='user', website=True)
-    def portal_my_donations(self, page=1, date_begin=None, date_end=None, sortby=None, **kw):
+    def portal_my_donations(
+        self, page=1, sortby=None, filter_year=None, filter_month=None, **kw,
+    ):
         values = self._prepare_portal_layout_values()
         partner = request.env.user.partner_id
-        DonationSudo = request.env['donation.donation'].sudo()
+        history = self._prepare_donation_history(
+            partner, sortby=sortby, filter_year=filter_year, filter_month=filter_month,
+        )
+        Donation = history['Donation']
+        domain = history['domain']
+        url_args = self._donation_portal_filter_args(
+            history['sortby'], filter_year, filter_month,
+        )
 
-        domain = [
-            ('partner_id', '=', partner.id),
-            ('state', '=', 'confirmed'),
-        ]
-        if date_begin and date_end:
-            domain += [('date', '>=', date_begin), ('date', '<=', date_end)]
-
-        searchbar_sortings = {
-            'date': {'label': _('Date'), 'order': 'date desc'},
-            'amount': {'label': _('Amount'), 'order': 'amount desc'},
-            'name': {'label': _('Reference'), 'order': 'name'},
-        }
-        if not sortby:
-            sortby = 'date'
-        order = searchbar_sortings[sortby]['order']
-
-        donation_count = DonationSudo.search_count(domain)
+        donation_count = Donation.search_count(domain)
         pager = portal_pager(
             url="/my/donations",
-            url_args={'date_begin': date_begin, 'date_end': date_end, 'sortby': sortby},
+            url_args=url_args,
             total=donation_count,
             page=page,
             step=self._items_per_page,
         )
-        donations = DonationSudo.search(
-            domain, order=order, limit=self._items_per_page, offset=pager['offset'],
+        donations = Donation.search(
+            domain,
+            order=history['order'],
+            limit=self._items_per_page,
+            offset=pager['offset'],
         )
+        filtered_donations = Donation.search(domain, order=history['order'])
         recurring_rules = request.env['donation.recurring.rule'].sudo().search([
             ('partner_id', '=', partner.id),
             ('state', 'in', ('active', 'paused')),
         ], order='state asc, next_donation_date asc, id desc')
 
         values.update({
-            'date_begin': date_begin,
-            'date_end': date_end,
             'donations': donations,
+            'has_confirmed_donations': bool(Donation.search_count(
+                self._donation_portal_base_domain(partner),
+            )),
+            'history_total_amount': sum(filtered_donations.mapped('amount')),
+            'history_currency': filtered_donations[:1].currency_id or partner.currency_id,
+            'history_count': int(donation_count),
             'recurring_rules': recurring_rules,
             'page_name': 'donation',
             'pager': pager,
             'default_url': '/my/donations',
-            'searchbar_sortings': searchbar_sortings,
-            'sortby': sortby,
+            'searchbar_sortings': history['searchbar_sortings'],
+            'sortby': history['sortby'],
+            'filter_year': filter_year,
+            'filter_month': filter_month,
+            'available_years': history['available_years'],
+            'donation_months': history['donation_months'],
+            'period_label': history['period_label'],
         })
         return request.render('donation_management.portal_my_donations', values)
+
+    @http.route(['/my/donations/export'], type='http', auth='user', website=True)
+    def portal_my_donations_export(
+        self, sortby=None, filter_year=None, filter_month=None, export_format='csv', **kw,
+    ):
+        partner = request.env.user.partner_id
+        history = self._prepare_donation_history(
+            partner, sortby=sortby, filter_year=filter_year, filter_month=filter_month,
+        )
+        donations = history['Donation'].search(domain=history['domain'], order=history['order'])
+        period_slug = re.sub(r'[^\w\-]+', '_', history['period_label'].lower())
+        partner_slug = re.sub(r'[^\w\-]+', '_', partner.name)
+        filename_base = f'donation_history_{partner_slug}_{period_slug}'
+
+        if export_format == 'pdf':
+            if not donations:
+                return request.redirect(
+                    '/my/donations?' + url_encode(
+                        self._donation_portal_filter_args(sortby, filter_year, filter_month),
+                    ),
+                )
+            report = request.env.ref(
+                'donation_management.action_report_donation_history',
+                raise_if_not_found=False,
+            )
+            if not report:
+                return request.redirect('/my/donations')
+            pdf_content, _report_format = report.sudo()._render_qweb_pdf(
+                report.report_name,
+                donations.ids,
+                data={'report_period_label': history['period_label']},
+            )
+            pdf_headers = [
+                ('Content-Type', 'application/pdf'),
+                ('Content-Length', len(pdf_content)),
+            ]
+            return request.make_response(pdf_content, headers=pdf_headers)
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            'Date', 'Reference', 'Campaign', 'Category', 'Amount', 'Currency',
+            'Type', 'Tax Receipt', 'Fee Covered', 'Fee Amount',
+        ])
+        for donation in donations:
+            writer.writerow([
+                fields.Datetime.to_datetime(donation.date).strftime('%Y-%m-%d %H:%M:%S'),
+                donation.name,
+                donation.campaign_id.name or '',
+                donation.category_id.name or '',
+                donation.amount,
+                donation.currency_id.name,
+                'Recurring' if donation.is_recurring else 'One-time',
+                donation.tax_receipt_number or '',
+                'Yes' if donation.cover_fees else 'No',
+                donation.fee_amount,
+            ])
+        csv_content = output.getvalue().encode('utf-8-sig')
+        csv_headers = [
+            ('Content-Type', 'text/csv; charset=utf-8'),
+        ]
+        return request.make_response(csv_content, headers=csv_headers)
 
     @http.route(['/my/donations/<int:donation_id>'], type='http', auth='user', website=True)
     def portal_donation_detail(self, donation_id, access_token=None, **kw):

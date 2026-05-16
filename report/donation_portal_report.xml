@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_report_donation_history" model="ir.actions.report">
+        <field name="name">Donation History</field>
+        <field name="model">donation.donation</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">donation_management.report_donation_history_document</field>
+        <field name="report_file">donation_management.report_donation_history_document</field>
+        <field name="print_report_name">'Donation History - %s' % (object.partner_id.name)</field>
+    </record>
+
+    <template id="report_donation_history_document">
+        <t t-call="web.html_container">
+            <t t-call="web.external_layout">
+                <div class="page">
+                    <h2>Donation History</h2>
+                    <p t-if="docs">
+                        <strong>Donor:</strong> <span t-field="docs[0].partner_id"/>
+                        <t t-if="report_period_label">
+                            <br/><strong>Period:</strong> <t t-esc="report_period_label"/>
+                        </t>
+                        <br/><strong>Generated:</strong> <span t-esc="report_generated_date"/>
+                    </p>
+                    <table class="table table-sm table-bordered mt-4">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Reference</th>
+                                <th>Campaign</th>
+                                <th>Category</th>
+                                <th class="text-end">Amount</th>
+                                <th>Type</th>
+                                <th>Tax Receipt</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="docs" t-as="donation">
+                                <td><span t-field="donation.date" t-options="{'widget': 'date'}"/></td>
+                                <td><span t-field="donation.name"/></td>
+                                <td><span t-esc="donation.campaign_id.name or 'General'"/></td>
+                                <td><span t-esc="donation.category_id.name or '—'"/></td>
+                                <td class="text-end">
+                                    <span t-field="donation.amount" t-options="{'widget': 'monetary', 'display_currency': donation.currency_id}"/>
+                                </td>
+                                <td>
+                                    <t t-if="donation.is_recurring">Recurring</t>
+                                    <t t-else="">One-time</t>
+                                </td>
+                                <td><span t-esc="donation.tax_receipt_number or '—'"/></td>
+                            </tr>
+                        </tbody>
+                        <tfoot t-if="docs">
+                            <tr>
+                                <td colspan="4" class="text-end"><strong>Total</strong></td>
+                                <td class="text-end">
+                                    <strong>
+                                        <span t-esc="sum(docs.mapped('amount'))"
+                                              t-options="{'widget': 'monetary', 'display_currency': docs[0].currency_id}"/>
+                                    </strong>
+                                </td>
+                                <td colspan="2"/>
+                            </tr>
+                        </tfoot>
+                    </table>
+                    <p t-if="not docs" class="text-muted mt-4">No donations found for this period.</p>
+                </div>
+            </t>
+        </t>
+    </template>
+</odoo>

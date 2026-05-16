@@ -29,6 +29,8 @@
     <!-- Portal: My Donations List -->
     <template id="portal_my_donations" name="My Donations">
         <t t-call="portal.portal_layout">
+            <t t-set="history_count" t-value="history_count or 0"/>
+            <t t-set="history_total_amount" t-value="history_total_amount or 0.0"/>
             <t t-set="breadcrumbs_searchbar" t-value="True"/>
 
             <t t-call="portal.portal_searchbar">
@@ -37,15 +39,15 @@
 
             <!-- Recurring Donations (active and paused) -->
             <t t-if="recurring_rules">
-                <div class="card mb-4">
-                    <div class="card-header">
+                <div class="card o_portal_donation_section mb-4">
+                    <div class="card-header o_portal_donation_section_header">
                         <h4 class="mb-0">
                             <i class="fa fa-refresh me-2"></i>Recurring Donations
                         </h4>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
-                            <table class="table table-hover">
+                            <table class="table table-hover align-middle mb-0 o_portal_donation_table">
                                 <thead>
                                     <tr>
                                         <th>Reference</th>
@@ -115,7 +117,7 @@
                                 </tbody>
                             </table>
                         </div>
-                        <p class="text-muted small mb-0 mt-3">
+                        <p class="text-muted small mb-0 mt-3 o_portal_donation_hint">
                             Paused donations stay listed here so you can resume them anytime. Cancel ends the schedule permanently.
                         </p>
                     </div>
@@ -123,32 +125,91 @@
             </t>
 
             <!-- Donation History -->
-            <div class="card">
-                <div class="card-header">
-                    <div class="row">
-                        <div class="col">
-                            <h4 class="mb-0">
-                                <i class="fa fa-history me-2"></i>Donation History
-                            </h4>
+            <div class="card o_portal_donation_section o_portal_donation_history_card">
+                <div class="card-header o_portal_donation_section_header">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <h4 class="mb-0">
+                            <i class="fa fa-history me-2"></i>Donation History
+                        </h4>
+                        <a href="/donate" class="btn btn-primary btn-sm o_portal_donate_btn">
+                            <i class="fa fa-plus me-1"></i>Make Another Donation
+                        </a>
+                    </div>
+                </div>
+                <form method="get" action="/my/donations" class="o_portal_donation_history_toolbar">
+                    <input type="hidden" name="sortby" t-att-value="sortby"/>
+                    <div class="o_portal_donation_history_toolbar-inner">
+                        <div class="o_portal_donation_history_filters">
+                            <div class="o_portal_donation_filter_field">
+                                <label class="form-label" for="filter_year">Year</label>
+                                <select name="filter_year" id="filter_year" class="form-select form-select-sm">
+                                    <option value="" t-att-selected="not filter_year and 'selected' or None">All years</option>
+                                    <t t-foreach="available_years" t-as="year">
+                                        <option t-att-value="year"
+                                                t-att-selected="str(filter_year) == str(year) and 'selected' or None">
+                                            <t t-esc="year"/>
+                                        </option>
+                                    </t>
+                                </select>
+                            </div>
+                            <div class="o_portal_donation_filter_field">
+                                <label class="form-label" for="filter_month">Month</label>
+                                <select name="filter_month" id="filter_month" class="form-select form-select-sm"
+                                        t-att-disabled="not filter_year and 'disabled' or None">
+                                    <option value="" t-att-selected="not filter_month and 'selected' or None">All months</option>
+                                    <t t-foreach="donation_months" t-as="month_item">
+                                        <option t-att-value="month_item[0]"
+                                                t-att-selected="str(filter_month) == str(month_item[0]) and 'selected' or None">
+                                            <t t-esc="month_item[1]"/>
+                                        </option>
+                                    </t>
+                                </select>
+                            </div>
+                            <div class="o_portal_donation_filter_actions">
+                                <button type="submit" class="btn btn-primary btn-sm">
+                                    <i class="fa fa-filter me-1"/> Apply
+                                </button>
+                            </div>
                         </div>
-                        <div class="col-auto">
-                            <a href="/donate" class="btn btn-primary btn-sm">
-                                <i class="fa fa-plus me-1"></i>Make Another Donation
+                        <div class="o_portal_donation_history_exports">
+                            <a t-attf-href="/my/donations/export?sortby={{ sortby }}&amp;filter_year={{ filter_year or '' }}&amp;filter_month={{ filter_month or '' }}&amp;export_format=csv"
+                               class="btn btn-outline-secondary btn-sm">
+                                <i class="fa fa-download me-1"/> CSV
+                            </a>
+                            <a t-if="history_count"
+                               t-attf-href="/my/donations/export?sortby={{ sortby }}&amp;filter_year={{ filter_year or '' }}&amp;filter_month={{ filter_month or '' }}&amp;export_format=pdf"
+                               class="btn btn-outline-secondary btn-sm">
+                                <i class="fa fa-file-pdf-o me-1"/> PDF
                             </a>
                         </div>
                     </div>
-                </div>
-                <div class="card-body">
-                    <t t-if="not donations">
-                        <div class="text-center py-5">
-                            <i class="fa fa-heart-o" style="font-size: 64px; color: #ccc;"></i>
+                    <div class="o_portal_donation_history_summary" t-if="period_label">
+                        <span class="o_portal_donation_period_badge">
+                            <t t-esc="period_label"/>
+                        </span>
+                        <span class="text-muted">
+                            <t t-esc="history_count"/> donation<t t-if="history_count != 1">s</t>
+                        </span>
+                    </div>
+                </form>
+                <div class="card-body pt-0">
+                    <t t-if="not has_confirmed_donations">
+                        <div class="text-center py-5 o_portal_donation_empty">
+                            <i class="fa fa-heart-o o_portal_donation_empty_icon"></i>
                             <p class="mt-3 text-muted">You haven't made any donations yet.</p>
-                            <a href="/donate" class="btn btn-primary">Make Your First Donation</a>
+                            <a href="/donate" class="btn btn-primary o_portal_donate_btn">Make Your First Donation</a>
                         </div>
                     </t>
-                    <t t-if="donations">
+                    <t t-elif="not history_count">
+                        <div class="text-center py-5 o_portal_donation_empty">
+                            <i class="fa fa-search o_portal_donation_empty_icon text-muted"></i>
+                            <p class="mt-3 mb-1 text-muted">No donations match this period.</p>
+                            <p class="small text-muted">Try a different year or month, or choose &quot;All years&quot;.</p>
+                        </div>
+                    </t>
+                    <t t-elif="donations">
                         <div class="table-responsive">
-                            <table class="table table-hover">
+                            <table class="table table-hover align-middle mb-0 o_portal_donation_table">
                                 <thead>
                                     <tr>
                                         <th>Date</th>
@@ -201,13 +262,13 @@
                                         </tr>
                                     </t>
                                 </tbody>
-                                <tfoot t-if="len(donations) > 0">
+                                <tfoot t-if="history_count">
                                     <tr class="table-light">
                                         <td colspan="3" class="text-end"><strong>Total Donated:</strong></td>
                                         <td colspan="4">
                                             <strong>
-                                                <t t-esc="sum(donations.mapped('amount'))" 
-                                                   t-options="{'widget': 'monetary', 'display_currency': donations[0].currency_id}"/>
+                                                <t t-esc="history_total_amount"
+                                                   t-options="{'widget': 'monetary', 'display_currency': history_currency}"/>
                                             </strong>
                                         </td>
                                     </tr>
