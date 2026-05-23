@@ -2,6 +2,9 @@
 <odoo>
     <template id="donation_form_page" name="Donation Form">
         <t t-call="website.layout">
+            <t t-if="helcim_js_config_token">
+                <script type="text/javascript" src="https://secure.myhelcim.com/js/version2.js"/>
+            </t>
             <div id="wrap" class="oe_structure o_donation_page">
                 <section class="s_donation_form">
                     <div class="container">
@@ -20,6 +23,10 @@
                                         <t t-if="error == 'invalid_start_date'">Please enter a valid start date.</t>
                                         <t t-if="error == 'no_payment_method'">This payment provider is not configured with any payment methods. Please contact the site administrator.</t>
                                         <t t-if="error == 'invalid_payment'">We could not process your payment. Please try again or pick another payment method.</t>
+                                <t t-if="error == 'payment_cancelled'">Payment was cancelled. You can try again below.</t>
+                                <t t-if="error == 'payment_requires_js'">Please enable JavaScript to pay with this provider, or choose another payment method.</t>
+                                <t t-if="error == 'helcim_js_required'">Please complete card payment using the Donate Now button (do not refresh during checkout).</t>
+                                <t t-if="error == 'helcim_js_not_configured'">Card payments are not configured yet. Please add a Helcim.js token on the Helcim payment provider, or choose ACH.</t>
                                         <t t-if="error == 'access_denied'">Access denied to this donation.</t>
                                         <t t-else=""><t t-esc="error"/></t>
                                     </div>
@@ -33,19 +40,33 @@
 
                                 <div class="card shadow-sm">
                                     <div class="card-body p-4">
-                                        <form action="/donate/submit" method="POST" class="donation-form"
+                                        <form action="/donate/submit" method="POST"
+                                              name="helcimForm" id="helcimForm"
+                                              class="donation-form"
                                               t-att-data-default-fee-percent="default_fee_percent"
-                                              t-att-data-is-public="user._is_public() and '1' or '0'">
+                                              t-att-data-is-public="user._is_public() and '1' or '0'"
+                                              t-att-data-partner-country="user.partner_id.country_id.code if not user._is_public() and user.partner_id.country_id else 'US'"
+                                              t-att-data-helcim-checkout-mode="helcim_checkout_mode or ''"
+                                              t-att-data-helcim-js-token="helcim_js_config_token or ''">
                                             <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                                             <input type="hidden" name="fee_percent" id="fee_percent"
                                                    t-att-value="default_fee_percent"/>
+                                            <input type="hidden" name="donation_id" id="o_donation_helcim_donation_id" value=""/>
+                                            <input type="hidden" id="token" t-att-value="helcim_js_config_token or ''"/>
+                                            <input type="hidden" id="amount" value=""/>
+                                            <input type="hidden" id="customerCode" value=""/>
+                                            <input type="hidden" id="language" value="en"/>
+                                            <!-- Always 0: Helcim.js test mode creates cardTokens that cannot be charged via the Payment API. -->
+                                            <input type="hidden" id="test" value="0"/>
+                                            <div id="helcimResults" class="d-none" aria-live="polite"/>
 
+                                            <div id="o_donation_form_sections">
                                             <!-- Amount (first) -->
                                             <div class="donation-amount-section mb-4">
-                                                <label for="amount" class="donation-amount-heading">Donation amount</label>
+                                                <label for="donation_amount" class="donation-amount-heading">Donation amount</label>
                                                 <div class="donation-amount-box">
                                                     <span class="donation-amount-symbol" aria-hidden="true">$</span>
-                                                    <input type="number" name="amount" id="amount"
+                                                    <input type="number" name="amount" id="donation_amount"
                                                            class="donation-amount-input"
                                                            placeholder="0"
                                                            min="1" step="0.01"
@@ -141,63 +162,137 @@
 
                                             <!-- Payment method -->
                                             <h5 class="mb-3">Payment Method</h5>
-                                            <div class="donation-payment-methods mb-4" id="donation_payment_methods">
-                                                <t t-if="payment_tokens">
-                                                    <p class="donation-payment-section-label">Saved payment methods</p>
-                                                    <t t-foreach="payment_tokens" t-as="token">
-                                                        <label class="donation-payment-option" t-att-for="'payment_token_%s' % token.id">
+                                            <div class="donation-payment-picker mb-4" id="donation_payment_methods">
+                                                <div class="visually-hidden" aria-hidden="true" id="donation_payment_method_inputs">
+                                                    <t t-if="payment_tokens">
+                                                        <t t-foreach="payment_tokens" t-as="token">
+                                                            <t t-set="token_picker_meta" t-value="token.payment_method_id.name + ' · ' + token.provider_id.name"/>
                                                             <input type="radio"
                                                                    class="donation-payment-option-input"
                                                                    name="payment_method"
                                                                    t-att-id="'payment_token_%s' % token.id"
                                                                    t-att-value="'token_%s' % token.id"
                                                                    t-att-data-fee-percent="token.payment_method_id.get_donation_fee_coverage_percent()"
+                                                                   t-att-data-picker-title="token.display_name"
+                                                                   t-att-data-picker-meta="token_picker_meta"
+                                                                   t-att-data-picker-icon="'credit-card'"
                                                                    t-att-checked="'checked' if token_index == 0 else None"
                                                                    required="required"/>
-                                                            <span class="donation-payment-option-body">
-                                                                <span class="donation-payment-option-title">
-                                                                    <i class="fa fa-credit-card me-2 text-muted" aria-hidden="true"/>
-                                                                    <t t-esc="token.display_name"/>
-                                                                </span>
-                                                                <span class="donation-payment-option-meta">
-                                                                    <t t-esc="token.payment_method_id.name"/>
-                                                                    · <t t-esc="token.provider_id.name"/>
-                                                                </span>
-                                                            </span>
-                                                        </label>
+                                                        </t>
                                                     </t>
-                                                    <p class="donation-payment-section-label mt-3" t-if="providers">Or pay with a new method</p>
-                                                </t>
-                                                <div id="donation_saved_tokens_guest" class="mb-2" style="display: none;">
-                                                    <p class="donation-payment-section-label">Saved payment methods</p>
-                                                    <div id="donation_saved_tokens_list"/>
-                                                </div>
-                                                <t t-foreach="providers" t-as="provider">
-                                                    <label class="donation-payment-option" t-att-for="'payment_provider_%s' % provider.id">
+                                                    <div id="donation_saved_tokens_guest_radios"/>
+                                                    <t t-foreach="payment_options" t-as="option">
+                                                        <t t-set="pm" t-value="option['payment_method']"/>
+                                                        <t t-set="provider" t-value="option['provider']"/>
+                                                        <t t-set="pm_fee_pct" t-value="round(pm.get_donation_fee_coverage_percent(), 2)"/>
+                                                        <t t-set="pm_picker_meta" t-value="provider.name + ' · Fee if covered: ' + str(pm_fee_pct) + '%'"/>
                                                         <input type="radio"
                                                                class="donation-payment-option-input"
                                                                name="payment_method"
-                                                               t-att-id="'payment_provider_%s' % provider.id"
-                                                               t-att-value="'provider_%s' % provider.id"
-                                                               t-att-data-fee-percent="provider.get_donation_fee_coverage_percent()"
-                                                               t-att-checked="'checked' if (not payment_tokens and provider_index == 0) else None"
+                                                               t-att-id="'payment_method_%s' % pm.id"
+                                                               t-att-value="'method_%s' % pm.id"
+                                                               t-att-data-fee-percent="pm.get_donation_fee_coverage_percent()"
+                                                               t-att-data-provider-code="provider.code"
+                                                               t-att-data-payment-method-code="pm.code"
+                                                               t-att-data-helcim-checkout-mode="provider.helcim_checkout_mode if provider.code == 'helcim' else None"
+                                                               t-att-data-picker-title="pm.name"
+                                                               t-att-data-picker-meta="pm_picker_meta"
+                                                               t-att-data-picker-icon="'credit-card' if pm.code == 'card' else 'university' if pm.code == 'ach_direct_debit' else 'bank'"
+                                                               t-att-data-picker-is-new="'1'"
+                                                               t-att-checked="'checked' if (not payment_tokens and option_index == 0) else None"
                                                                required="required"/>
-                                                        <span class="donation-payment-option-body">
-                                                            <span class="donation-payment-option-title d-flex align-items-center gap-2">
-                                                                <img t-if="provider.image_128"
-                                                                     t-att-src="image_data_uri(provider.image_128)"
-                                                                     class="donation-provider-logo"
-                                                                     t-att-alt="provider.name"/>
-                                                                <t t-esc="provider.name"/>
-                                                            </span>
-                                                            <span class="donation-payment-option-meta">
-                                                                Processing fee if covered:
-                                                                <t t-esc="'%.2f' % provider.get_donation_fee_coverage_percent()"/>%
-                                                            </span>
+                                                    </t>
+                                                </div>
+
+                                                <label class="form-label donation-payment-dropdown-label mb-2" for="donation_payment_dropdown_toggle">
+                                                    How would you like to pay?
+                                                </label>
+                                                <div class="dropdown donation-payment-dropdown w-100">
+                                                    <button type="button"
+                                                            id="donation_payment_dropdown_toggle"
+                                                            class="donation-payment-dropdown-toggle dropdown-toggle w-100"
+                                                            data-bs-toggle="dropdown"
+                                                            data-bs-auto-close="true"
+                                                            aria-expanded="false">
+                                                        <span class="donation-payment-dropdown-leading" aria-hidden="true">
+                                                            <i class="fa fa-credit-card donation-payment-dropdown-icon"/>
                                                         </span>
-                                                    </label>
-                                                </t>
-                                                <p t-if="not providers and not payment_tokens" class="text-muted mb-0">
+                                                        <span class="donation-payment-dropdown-text">
+                                                            <span class="donation-payment-dropdown-title">Select payment method</span>
+                                                            <span class="donation-payment-dropdown-meta text-muted"/>
+                                                        </span>
+                                                    </button>
+                                                    <ul class="dropdown-menu donation-payment-dropdown-menu w-100 shadow-sm" id="donation_payment_dropdown_menu">
+                                                        <t t-if="payment_tokens">
+                                                            <li><h6 class="dropdown-header">Saved payment methods</h6></li>
+                                                            <t t-foreach="payment_tokens" t-as="token">
+                                                                <li>
+                                                                    <button type="button"
+                                                                            class="dropdown-item donation-payment-picker-item"
+                                                                            t-att-data-radio-id="'payment_token_%s' % token.id">
+                                                                        <span class="donation-payment-picker-item-icon">
+                                                                            <i class="fa fa-credit-card text-muted" aria-hidden="true"/>
+                                                                        </span>
+                                                                        <span class="donation-payment-picker-item-body">
+                                                                            <span class="donation-payment-picker-item-title">
+                                                                                <t t-esc="token.display_name"/>
+                                                                            </span>
+                                                                            <span class="donation-payment-picker-item-meta">
+                                                                                <t t-esc="token.payment_method_id.name"/>
+                                                                                · <t t-esc="token.provider_id.name"/>
+                                                                            </span>
+                                                                        </span>
+                                                                    </button>
+                                                                </li>
+                                                            </t>
+                                                        </t>
+                                                        <li id="donation_saved_tokens_guest_header" class="d-none">
+                                                            <h6 class="dropdown-header">Saved payment methods</h6>
+                                                        </li>
+                                                        <!-- Guest saved cards: <li> items inserted after header by JS -->
+                                                        <t t-if="payment_options">
+                                                            <li t-if="payment_tokens">
+                                                                <hr class="dropdown-divider"/>
+                                                            </li>
+                                                            <li><h6 class="dropdown-header">Pay with a new method</h6></li>
+                                                            <t t-foreach="payment_options" t-as="option">
+                                                                <t t-set="pm" t-value="option['payment_method']"/>
+                                                                <t t-set="provider" t-value="option['provider']"/>
+                                                                <li>
+                                                                    <button type="button"
+                                                                            class="dropdown-item donation-payment-picker-item donation-payment-picker-item--new"
+                                                                            t-att-data-radio-id="'payment_method_%s' % pm.id">
+                                                                        <span class="donation-payment-picker-item-icon">
+                                                                            <img t-if="pm.image_payment_form"
+                                                                                 t-att-src="image_data_uri(pm.image_payment_form)"
+                                                                                 class="donation-provider-logo"
+                                                                                 t-att-alt="pm.name"/>
+                                                                            <i t-else=""
+                                                                               t-attf-class="fa fa-#{ 'credit-card' if pm.code == 'card' else 'university' if pm.code == 'ach_direct_debit' else 'bank' } text-muted"
+                                                                               aria-hidden="true"/>
+                                                                        </span>
+                                                                        <span class="donation-payment-picker-item-body">
+                                                                            <span class="donation-payment-picker-item-title">
+                                                                                <t t-esc="pm.name"/>
+                                                                            </span>
+                                                                            <span class="donation-payment-picker-item-meta">
+                                                                                <t t-esc="provider.name"/>
+                                                                                · Fee if covered:
+                                                                                <t t-esc="round(pm.get_donation_fee_coverage_percent(), 2)"/>%
+                                                                            </span>
+                                                                        </span>
+                                                                    </button>
+                                                                </li>
+                                                            </t>
+                                                        </t>
+                                                    </ul>
+                                                </div>
+                                                <button type="button"
+                                                        id="donation_payment_edit_btn"
+                                                        class="btn btn-link btn-sm ps-0 mt-2 d-none">
+                                                    <i class="fa fa-pencil me-1" aria-hidden="true"/> Enter payment details
+                                                </button>
+                                                <p t-if="not payment_options and not payment_tokens" class="text-muted mb-0">
                                                     No payment methods are available. Please contact us.
                                                 </p>
                                             </div>
@@ -216,6 +311,176 @@
                                                 </small>
                                             </div>
 
+                                            <!-- Payment details modal (new methods) -->
+                                            <div class="modal fade" id="o_donation_payment_modal" tabindex="-1"
+                                                 aria-labelledby="o_donation_payment_modal_label" aria-hidden="true">
+                                                <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+                                                    <div class="modal-content donation-payment-modal">
+                                                        <div class="modal-header border-0 pb-0">
+                                                            <h5 class="modal-title" id="o_donation_payment_modal_label">Payment details</h5>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"/>
+                                                        </div>
+                                                        <div class="modal-body pt-2">
+                                                            <p id="o_donation_payment_modal_intro" class="text-muted small mb-3 d-none"/>
+                                                            <div id="o_donation_helcim_payment_details" class="o_donation_helcim_payment_details">
+                                                <div id="o_donation_helcim_card_js" class="d-none">
+                                                    <div class="row g-3">
+                                                        <div class="col-12">
+                                                            <label class="form-label" for="cardHolderName">Name on card *</label>
+                                                            <input type="text" id="cardHolderName"
+                                                                   class="form-control" autocomplete="cc-name"
+                                                                   t-att-value="user.partner_id.name if not user._is_public() else None"/>
+                                                        </div>
+                                                        <div class="col-12">
+                                                            <label class="form-label" for="cardNumber">Card number *</label>
+                                                            <input type="text" id="cardNumber"
+                                                                   class="form-control" inputmode="numeric" autocomplete="cc-number"
+                                                                   placeholder="4111 1111 1111 1111"/>
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <label class="form-label" for="cardExpiry">Expiry (MMYY) *</label>
+                                                            <input type="text" id="cardExpiry"
+                                                                   class="form-control" inputmode="numeric" autocomplete="cc-exp"
+                                                                   placeholder="0526" maxlength="4"/>
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <label class="form-label" for="cardCVV">Security code *</label>
+                                                            <input type="text" id="cardCVV"
+                                                                   class="form-control" inputmode="numeric" autocomplete="cc-csc"
+                                                                   maxlength="4"/>
+                                                        </div>
+                                                        <div class="col-md-8">
+                                                            <label class="form-label" for="cardHolderAddress">Billing street *</label>
+                                                            <input type="text" id="cardHolderAddress"
+                                                                   class="form-control"
+                                                                   t-att-value="user.partner_id.street if not user._is_public() else None"/>
+                                                        </div>
+                                                        <div class="col-md-4">
+                                                            <label class="form-label" for="cardHolderPostalCode">ZIP / Postal *</label>
+                                                            <input type="text" id="cardHolderPostalCode"
+                                                                   class="form-control"
+                                                                   t-att-value="user.partner_id.zip if not user._is_public() else None"/>
+                                                        </div>
+                                                    </div>
+                                                    <p class="form-text text-muted mb-0 mt-2">
+                                                        Card details are sent securely from your browser to Helcim (not through this server).
+                                                    </p>
+                                                </div>
+                                                <div id="o_donation_helcim_card_api" class="d-none">
+                                                    <div class="row g-3">
+                                                        <div class="col-12">
+                                                            <label class="form-label" for="helcim_card_holder_name">Name on card *</label>
+                                                            <input type="text" name="helcim_card_holder_name" id="helcim_card_holder_name"
+                                                                   class="form-control" autocomplete="cc-name"
+                                                                   t-att-value="user.partner_id.name if not user._is_public() else None"/>
+                                                        </div>
+                                                        <div class="col-12">
+                                                            <label class="form-label" for="helcim_card_number">Card number *</label>
+                                                            <input type="text" name="helcim_card_number" id="helcim_card_number"
+                                                                   class="form-control" inputmode="numeric" autocomplete="cc-number"
+                                                                   placeholder="4111 1111 1111 1111"/>
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <label class="form-label" for="helcim_card_expiry">Expiry (MM/YY) *</label>
+                                                            <input type="text" name="helcim_card_expiry" id="helcim_card_expiry"
+                                                                   class="form-control" inputmode="numeric" autocomplete="cc-exp"
+                                                                   placeholder="MM/YY" maxlength="7"/>
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <label class="form-label" for="helcim_card_cvv">Security code *</label>
+                                                            <input type="text" name="helcim_card_cvv" id="helcim_card_cvv"
+                                                                   class="form-control" inputmode="numeric" autocomplete="cc-csc"
+                                                                   maxlength="4"/>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div id="o_donation_helcim_ach" class="d-none">
+                                                    <div class="row g-3">
+                                                        <div class="col-12">
+                                                            <label class="form-label" for="helcim_bank_account_holder">Account holder name *</label>
+                                                            <input type="text" name="helcim_bank_account_holder" id="helcim_bank_account_holder"
+                                                                   class="form-control"
+                                                                   t-att-value="user.partner_id.name if not user._is_public() else None"/>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label class="form-label" for="helcim_bank_holder_type">Account holder type *</label>
+                                                            <select name="helcim_bank_holder_type" id="helcim_bank_holder_type" class="form-select">
+                                                                <option value="1">Personal</option>
+                                                                <option value="2">Business</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label class="form-label" for="helcim_bank_account_type">Account type *</label>
+                                                            <select name="helcim_bank_account_type" id="helcim_bank_account_type" class="form-select">
+                                                                <option value="1">Checking</option>
+                                                                <option value="2">Savings</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="col-12">
+                                                            <label class="form-label" for="helcim_bank_account_number">Account number *</label>
+                                                            <input type="text" name="helcim_bank_account_number" id="helcim_bank_account_number"
+                                                                   class="form-control" inputmode="numeric" autocomplete="off"/>
+                                                        </div>
+                                                        <div class="col-12 o_donation_helcim_ach_us">
+                                                            <label class="form-label" for="helcim_bank_routing">Routing number (US) *</label>
+                                                            <input type="text" name="helcim_bank_routing" id="helcim_bank_routing"
+                                                                   class="form-control" inputmode="numeric" autocomplete="off"/>
+                                                        </div>
+                                                        <div class="col-md-6 o_donation_helcim_ach_ca d-none">
+                                                            <label class="form-label" for="helcim_bank_financial">Financial institution (Canada)</label>
+                                                            <input type="text" name="helcim_bank_financial" id="helcim_bank_financial"
+                                                                   class="form-control" inputmode="numeric" autocomplete="off"/>
+                                                        </div>
+                                                        <div class="col-md-6 o_donation_helcim_ach_ca d-none">
+                                                            <label class="form-label" for="helcim_bank_transit">Transit number (Canada)</label>
+                                                            <input type="text" name="helcim_bank_transit" id="helcim_bank_transit"
+                                                                   class="form-control" inputmode="numeric" autocomplete="off"/>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label class="form-label" for="helcim_bank_street">Street address *</label>
+                                                            <input type="text" name="helcim_bank_street" id="helcim_bank_street"
+                                                                   class="form-control"
+                                                                   t-att-value="user.partner_id.street if not user._is_public() else None"/>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label class="form-label" for="helcim_bank_city">City *</label>
+                                                            <input type="text" name="helcim_bank_city" id="helcim_bank_city"
+                                                                   class="form-control"
+                                                                   t-att-value="user.partner_id.city if not user._is_public() else None"/>
+                                                        </div>
+                                                        <div class="col-md-4">
+                                                            <label class="form-label" for="helcim_bank_state">State / Province *</label>
+                                                            <input type="text" name="helcim_bank_state" id="helcim_bank_state"
+                                                                   class="form-control"
+                                                                   t-att-value="user.partner_id.state_id.code if not user._is_public() and user.partner_id.state_id else None"/>
+                                                        </div>
+                                                        <div class="col-md-4">
+                                                            <label class="form-label" for="helcim_bank_zip">ZIP / Postal code *</label>
+                                                            <input type="text" name="helcim_bank_zip" id="helcim_bank_zip"
+                                                                   class="form-control"
+                                                                   t-att-value="user.partner_id.zip if not user._is_public() else None"/>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div id="o_donation_helcim_save" class="form-check mt-3 d-none">
+                                                    <input class="form-check-input" type="checkbox" id="helcim_save_payment_method"
+                                                           name="helcim_save_payment_method"/>
+                                                    <label class="form-check-label" for="helcim_save_payment_method">
+                                                        Save this payment method for future donations
+                                                    </label>
+                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="modal-footer border-0 pt-0">
+                                                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                                                            <button type="button" class="btn btn-primary" id="o_donation_payment_modal_done">
+                                                                Done
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
                                             <div class="d-grid">
                                                 <button type="submit" class="btn btn-primary btn-lg">
                                                     <i class="fa fa-heart me-2"></i> Donate Now
@@ -225,6 +490,7 @@
                                             <p class="text-muted text-center mt-3 small">
                                                 Your donation is secure and processed through our trusted payment partners.
                                             </p>
+                                            </div>
                                         </form>
                                     </div>
                                 </div>
@@ -247,7 +513,6 @@
                             <p class="lead" t-if="redirect_form_html">
                                 Please wait while we redirect you to the payment provider…
                             </p>
-
                             <t t-if="redirect_form_html">
                                 <div id="o_donation_payment_redirect" t-out="redirect_form_html"/>
                                 <script>
@@ -289,7 +554,19 @@
                                 </form>
                             </t>
 
-                            <t t-if="not redirect_form_html and not demo_direct">
+                            <t t-if="helcim_pay_autostart">
+                                <p class="text-muted mb-4">
+                                    Opening the secure Helcim payment window…
+                                </p>
+                                <div id="o_donation_helcim_pay_bootstrap" class="d-none"
+                                     t-att-data-reference="tx.reference"
+                                     t-att-data-payment-method-code="payment_method.code"
+                                     t-att-data-tokenize="'1' if tx.tokenize else '0'"
+                                     t-att-data-donation-id="donation.id"
+                                     t-att-data-access-token="donation.access_token"/>
+                            </t>
+
+                            <t t-if="not redirect_form_html and not demo_direct and not helcim_pay_autostart">
                                 <div class="alert alert-warning">
                                     Payment could not be started for this provider configuration.
                                     Please try another payment method or contact support.
@@ -328,6 +605,15 @@
                                             <td class="text-end"><strong>Amount:</strong></td>
                                             <td class="text-start">
                                                 <t t-esc="donation.amount" t-options="{'widget': 'monetary', 'display_currency': donation.currency_id}"/>
+                                            </td>
+                                        </tr>
+                                        <tr t-if="donation.payment_transaction_id and donation.payment_transaction_id.provider_reference">
+                                            <td class="text-end"><strong>Helcim transaction:</strong></td>
+                                            <td class="text-start">
+                                                <t t-esc="donation.payment_transaction_id.provider_reference"/>
+                                                <t t-if="donation.payment_transaction_id.provider_id.state == 'test'">
+                                                    <br/><small class="text-muted">Test mode — find this under Payments → Test Transactions in Helcim.</small>
+                                                </t>
                                             </td>
                                         </tr>
                                         <tr t-if="donation.campaign_id">

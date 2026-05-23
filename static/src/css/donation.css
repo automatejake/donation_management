@@ -113,59 +113,140 @@
     color: #868e96;
 }
 
-/* Payment method selection */
-.donation-payment-section-label {
-    margin-bottom: 0.5rem;
-    font-size: 0.75rem;
+/* Payment method dropdown */
+.donation-payment-dropdown-label {
+    font-size: 0.8125rem;
     font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: #6c757d;
+    letter-spacing: 0.03em;
+    color: #5c6370;
 }
 
-.donation-payment-option {
+.donation-payment-dropdown-toggle {
     display: flex;
-    align-items: flex-start;
-    gap: 0.75rem;
-    margin-bottom: 0.5rem;
+    align-items: center;
+    gap: 0.85rem;
     padding: 0.85rem 1rem;
-    border: 2px solid #e9ecef;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+    text-align: left;
+    background: #fff;
+    border: 2px solid #e4e8f4;
+    border-radius: 12px;
+    color: #212529;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
-.donation-payment-option:hover {
-    border-color: #c5cce0;
-    background-color: #f8f9fe;
-}
-
-.donation-payment-option-input {
-    margin-top: 0.35rem;
-    flex-shrink: 0;
-}
-
-.donation-payment-option:has(.donation-payment-option-input:checked) {
+.donation-payment-dropdown-toggle:hover,
+.donation-payment-dropdown-toggle:focus,
+.donation-payment-dropdown-toggle.show {
     border-color: #667eea;
-    background-color: #f0f3ff;
-    box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.15);
-}
-
-.donation-payment-option-body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    min-width: 0;
-}
-
-.donation-payment-option-title {
-    font-weight: 600;
+    background-color: #f8f9fe;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
     color: #212529;
 }
 
-.donation-payment-option-meta {
+.donation-payment-dropdown-toggle::after {
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.donation-payment-dropdown-leading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex-shrink: 0;
+    border-radius: 8px;
+    background: linear-gradient(145deg, #f0f3ff 0%, #e8ecff 100%);
+    color: #667eea;
+}
+
+.donation-payment-dropdown-icon {
+    font-size: 1rem;
+}
+
+.donation-payment-dropdown-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.donation-payment-dropdown-title {
+    font-weight: 600;
+    font-size: 0.9375rem;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.donation-payment-dropdown-meta {
     font-size: 0.8125rem;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.donation-payment-dropdown-menu {
+    max-height: min(20rem, 60vh);
+    overflow-y: auto;
+    border: 1px solid #e4e8f4;
+    border-radius: 12px;
+    padding: 0.35rem;
+}
+
+.donation-payment-dropdown-menu .dropdown-header {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #868e96;
+}
+
+.donation-payment-picker-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 8px;
+    white-space: normal;
+}
+
+.donation-payment-picker-item:hover,
+.donation-payment-picker-item:focus,
+.donation-payment-picker-item.active {
+    background-color: #f0f3ff;
+    color: #212529;
+}
+
+.donation-payment-picker-item-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+}
+
+.donation-payment-picker-item-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+}
+
+.donation-payment-picker-item-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+    line-height: 1.3;
+}
+
+.donation-payment-picker-item-meta {
+    font-size: 0.75rem;
     color: #6c757d;
+    line-height: 1.3;
 }
 
 .donation-provider-logo {
@@ -173,6 +254,33 @@
     height: 28px;
     object-fit: contain;
     border-radius: 4px;
+}
+
+#donation_payment_edit_btn {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+#donation_payment_edit_btn:hover {
+    color: #4c51bf;
+    text-decoration: underline;
+}
+
+.donation-payment-modal .modal-content {
+    border: none;
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(15, 23, 42, 0.15);
+}
+
+.donation-payment-modal .modal-title {
+    font-weight: 700;
+}
+
+.donation-payment-modal .btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    font-weight: 600;
 }
 
 /* Schedule buttons */
@@ -394,4 +502,49 @@
     .o_portal_donation_history_exports .btn {
         flex: 1 1 auto;
     }
+}
+
+/* Inline Helcim checkout on /donate */
+.o_donation_helcim_panel {
+    padding: 1.25rem 1.35rem;
+    background: #f8f9fe;
+    border: 1px solid #e4e8f4;
+    border-radius: 12px;
+}
+
+.o_donation_helcim_back {
+    color: #5c6370;
+    text-decoration: none;
+}
+
+.o_donation_helcim_back:hover {
+    color: #667eea;
+}
+
+.o_donation_helcim_loading {
+    display: flex;
+    align-items: center;
+    color: #5c6370;
+}
+
+.o_donation_helcim_mount {
+    min-height: 120px;
+}
+
+/* Helcim embedded in the donation card (fee saver disabled) */
+.o_donation_helcim_embedded .o_donation_helcim_mount {
+    min-height: 520px;
+}
+
+/* Fee saver modal overlay: keep back control above Helcim */
+body.o_donation_helcim_modal .o_donation_helcim_back {
+    position: fixed;
+    top: 0.75rem;
+    left: 1rem;
+    z-index: 2147483646;
+    background: rgba(255, 255, 255, 0.97);
+    border: 1px solid #e4e8f4;
+    border-radius: 6px;
+    padding: 0.35rem 0.75rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }

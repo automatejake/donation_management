@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Donation Management',
-    'version': '18.0.1.1.0',
+    'version': '18.0.1.1.1',
     'category': 'Website/Website',
     'summary': 'Manage online donations with recurring payments',
     'description': """
@@ -13,12 +13,13 @@
         * Automatic recurring donation processing
         * Payment token support for saved cards
     """,
-    'author': 'Your Organization',
-    'website': 'https://www.yourorganization.com',
+    'author': 'Jacob Neubaum',
+    'website': 'https://www.automatejake.com',
     'depends': [
         'base',
         'website',
         'payment',
+        'payment_helcim',
         'portal',
         'account',
     ],
@@ -38,10 +39,12 @@
     'assets': {
         'web.assets_frontend': [
             'donation_management/static/src/js/donation_form.js',
+            'donation_management/static/src/js/donation_helcim_pay_redirect.js',
             'donation_management/static/src/css/donation.css',
         ],
     },
     'installable': True,
     'application': True,
     'license': 'LGPL-3',
+    # 'post_init_hook': 'post_init_hook',
 }

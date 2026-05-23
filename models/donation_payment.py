@@ -64,7 +64,8 @@ class PaymentTransaction(models.Model):
 
     def _post_process(self):
         """Donation payments: post receipts/revenue entry only (no invoice, no AR payment)."""
-        donations = self.env['donation.donation'].search([
+        # sudo: /payment/status/poll runs as public; guests cannot read donation.donation
+        donations = self.env['donation.donation'].sudo().search([
             ('payment_transaction_id', 'in', self.ids),
         ])
         donations_by_tx = {}
@@ -75,15 +76,19 @@ class PaymentTransaction(models.Model):
         other_txs = self - donation_txs
 
         if other_txs:
-            super()._post_process(other_txs)
+            PaymentTransactionBase._post_process(other_txs)
 
         for tx in donation_txs:
-            PaymentTransactionBase._post_process(tx)
+            if not tx.is_post_processed:
+                PaymentTransactionBase._post_process(tx)
             donation = donations_by_tx.get(tx.id)
             if not donation:
                 continue
             if tx.state == 'done':
-                donation._finalize_after_payment(tx)
+                if donation.state not in ('confirmed', 'cancelled'):
+                    donation._finalize_after_payment(tx)
+                if tx.provider_code == 'helcim' and tx.helcim_card_batch_id:
+                    tx._helcim_link_batch_from_donation_move(donation)
             elif tx.state == 'cancel':
                 donation.action_cancel()
             elif tx.state == 'error' and donation.state == 'pending':

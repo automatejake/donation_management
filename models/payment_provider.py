@@ -18,6 +18,16 @@ class PaymentProvider(models.Model):
             pms = self.with_context(active_test=False).payment_method_ids[:1]
         return pms[:1]
 
+    def _donation_payment_operation(self, is_validation=False):
+        """Return the payment.transaction operation for website donations."""
+        self.ensure_one()
+        if is_validation:
+            return 'validation'
+        if self.code == 'helcim' and self.helcim_checkout_mode == 'helcimpay_js':
+            return 'online_direct'
+        redirect_form_view = self._get_redirect_form_view(is_validation=False)
+        return 'online_redirect' if redirect_form_view else 'online_direct'
+
     def get_donation_fee_coverage_percent(self):
         """Fee % from primary payment method, then provider, then system default."""
         self.ensure_one()
