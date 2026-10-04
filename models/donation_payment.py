@@ -75,8 +75,10 @@ class PaymentTransaction(models.Model):
         donation_txs = self.filtered(lambda t: t.id in donations_by_tx)
         other_txs = self - donation_txs
 
+        # Other transactions (shop orders, invoices) keep the full chain:
+        # account_payment creates their payment, payment providers add theirs.
         if other_txs:
-            PaymentTransactionBase._post_process(other_txs)
+            super(PaymentTransaction, other_txs)._post_process()
 
         for tx in donation_txs:
             if not tx.is_post_processed:
