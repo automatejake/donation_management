@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Donation Management',
-    'version': '18.0.1.1.1',
+    'version': '18.0.1.2.0',
     'category': 'Website/Website',
     'summary': 'Manage online donations with recurring payments',
     'description': """

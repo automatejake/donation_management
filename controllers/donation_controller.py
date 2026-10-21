@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import csv
+import hmac
 import io
 import logging
 import re
@@ -73,8 +74,8 @@ class DonationWebsiteController(http.Controller):
         if not method_type:
             return None, None
         if method_type == 'token':
-            token = request.env['payment.token'].sudo().browse(method_id)
-            if not token.exists():
+            token = self._own_payment_token(method_id)
+            if not token:
                 return None, None
             return token.provider_id, token.payment_method_id
 
@@ -99,6 +100,22 @@ class DonationWebsiteController(http.Controller):
             return provider, self._payment_method_for_provider(provider)
 
         return None, None
+
+    def _own_payment_token(self, token_id):
+        """The saved payment method ``token_id`` if it belongs to the logged-in user, else empty.
+
+        Saved cards and bank accounts are only offered to, and usable by, the
+        signed-in donor who owns them: an email address typed on the form is
+        not proof of who is paying.
+        """
+        Token = request.env['payment.token'].sudo()
+        user = request.env.user
+        if user._is_public() or not token_id:
+            return Token
+        token = Token.browse(token_id).exists()
+        if not token or token.partner_id.commercial_partner_id != user.partner_id.commercial_partner_id:
+            return Token
+        return token
 
     def _get_payment_tokens(self, partner, providers):
         if not partner or partner.is_public:
@@ -150,8 +167,8 @@ class DonationWebsiteController(http.Controller):
             if provider.exists():
                 return provider.get_donation_fee_coverage_percent()
         if method_type == 'token' and method_id:
-            token = request.env['payment.token'].sudo().browse(method_id)
-            if token.exists() and token.payment_method_id:
+            token = self._own_payment_token(method_id)
+            if token and token.payment_method_id:
                 return token.payment_method_id.get_donation_fee_coverage_percent()
         return self._get_default_fee_coverage_percent()
 
@@ -212,22 +229,12 @@ class DonationWebsiteController(http.Controller):
 
     @http.route('/donate/tokens', type='json', auth='public')
     def donation_tokens(self, email=None):
-        """Return saved payment methods for a partner matched by email (guest donors)."""
-        email = (email or '').strip()
-        if not email:
-            return []
-        partner = request.env['res.partner'].sudo().search([('email', '=', email)], limit=1)
-        if not partner:
-            return []
-        providers = self._get_compatible_providers(partner)
-        tokens = self._get_payment_tokens(partner, providers)
-        return [{
-            'id': token.id,
-            'display_name': token.display_name,
-            'payment_method': token.payment_method_id.name,
-            'provider_name': token.provider_id.name,
-            'fee_percent': token.payment_method_id.get_donation_fee_coverage_percent(),
-        } for token in tokens]
+        """Saved payment methods are no longer looked up by email: guests get none.
+
+        Kept so pages cached before this change still load; signed-in donors
+        get their own saved methods on the form itself.
+        """
+        return []
 
     def _validate_donation_post(self, post):
         """Validate donation form POST/JSON data.
@@ -442,8 +449,11 @@ class DonationWebsiteController(http.Controller):
             donation.unlink()
             return {'error': 'invalid_provider', 'message': customer_vals['errorMessage']}
 
+        donation_sudo = donation.sudo()
+        donation_sudo._portal_ensure_token()
         return {
             'donation_id': donation.id,
+            'access_token': donation_sudo.access_token,
             'amount': tx.amount,
             'customer_code': customer_vals.get('customerCode'),
             'tokenize': bool(tx.tokenize),
@@ -507,10 +517,13 @@ class DonationWebsiteController(http.Controller):
         donation = request.env['donation.donation'].sudo().browse(donation_id).exists()
         if not donation or donation.state not in ('draft', 'pending'):
             return request.redirect('/donate?error=invalid_payment')
+        # Only the browser that started this checkout holds the donation's token.
+        access_token = str(post.get('access_token') or '')
+        if not donation.access_token or not hmac.compare_digest(donation.access_token, access_token):
+            return request.redirect('/donate?error=invalid_payment')
 
         tx = donation.payment_transaction_id
-        if not tx or tx.provider_code != 'helcim':
-            donation.unlink()
+        if not tx or tx.provider_code != 'helcim' or tx.state not in ('draft', 'pending'):
             return request.redirect('/donate?error=invalid_payment')
 
         tokenize = (
@@ -653,8 +666,8 @@ class DonationWebsiteController(http.Controller):
         )
 
     def _pay_with_saved_token(self, donation, token_id):
-        token = request.env['payment.token'].sudo().browse(token_id)
-        if not token.exists():
+        token = self._own_payment_token(token_id)
+        if not token:
             donation.unlink()
             return request.redirect('/donate?error=invalid_token')
 

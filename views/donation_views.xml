@@ -207,6 +207,13 @@
                             <field name="frequency"/>
                             <field name="next_donation_date"/>
                             <field name="payment_token_id" domain="[('partner_id', '=', partner_id)]"/>
+                            <field name="failed_charge_count" invisible="not failed_charge_count"/>
+                            <label for="charging_donation_id" invisible="not charging_donation_id"/>
+                            <div invisible="not charging_donation_id" class="o_row">
+                                <field name="charging_donation_id"/>
+                                <button name="action_clear_unfinished_charge" type="object" string="Checked, clear"
+                                        class="btn-link" confirm="Did you check this charge with the payment provider?"/>
+                            </div>
                         </group>
                     </group>
                     <group>
