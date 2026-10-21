@@ -246,6 +246,7 @@ publicWidget.registry.DonationForm = publicWidget.Widget.extend({
             }
             this.el.action = "/donate/helcim_js_complete";
             this.$("#o_donation_helcim_donation_id").val(result.donation_id);
+            this.$("#o_donation_helcim_access_token").val(result.access_token || "");
             const helcimAmount =
                 result.operation === "validation"
                     ? Number(result.amount).toFixed(2)
@@ -594,14 +595,10 @@ publicWidget.registry.DonationForm = publicWidget.Widget.extend({
             $guestRadios.empty();
             return;
         }
-        try {
-            const tokens = await rpc("/donate/tokens", { email });
-            this._renderGuestTokens(tokens);
-        } catch {
-            $guestHeader.addClass("d-none");
-            this._clearGuestTokenMenuItems();
-            $guestRadios.empty();
-        }
+        // Saved payment methods are only offered to signed-in donors.
+        $guestHeader.addClass("d-none");
+        this._clearGuestTokenMenuItems();
+        $guestRadios.empty();
     },
 
     _clearGuestTokenMenuItems: function () {

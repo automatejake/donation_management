@@ -52,6 +52,7 @@
                                             <input type="hidden" name="fee_percent" id="fee_percent"
                                                    t-att-value="default_fee_percent"/>
                                             <input type="hidden" name="donation_id" id="o_donation_helcim_donation_id" value=""/>
+                                            <input type="hidden" name="access_token" id="o_donation_helcim_access_token" value=""/>
                                             <input type="hidden" id="token" t-att-value="helcim_js_config_token or ''"/>
                                             <input type="hidden" id="amount" value=""/>
                                             <input type="hidden" id="customerCode" value=""/>

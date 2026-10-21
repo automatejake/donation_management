@@ -16,19 +16,26 @@ class DonationPayment(models.Model):
 
         try:
             tx._send_payment_request()
-            if tx.state == 'done':
-                tx._post_process()
-                return True
-            if tx.state == 'pending':
-                self.state = 'pending'
-                return True
-            return False
         except Exception as e:
             self.message_post(
                 body=f"Payment processing failed: {str(e)}",
                 subject="Payment Error",
             )
-            return False
+        # Whatever failed above or below, a charge the provider took or may
+        # have taken counts as charged, so the gift is never charged twice.
+        if tx.state == 'done':
+            try:
+                tx._post_process()
+            except Exception as e:
+                self.message_post(
+                    body=f"Payment received but recording it failed: {str(e)}",
+                    subject="Payment Error",
+                )
+            return True
+        if tx.state in ('pending', 'authorized'):
+            self.state = 'pending'
+            return True
+        return False
 
     def _prepare_payment_transaction_values(self):
         self.ensure_one()

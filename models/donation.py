@@ -1,7 +1,14 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields, api, _, Command
+import logging
+
+from odoo import models, fields, api, modules, _, Command
 from odoo.exceptions import UserError
 from dateutil.relativedelta import relativedelta
+
+_logger = logging.getLogger(__name__)
+
+# Declines in a row before a recurring gift pauses and the donor is asked to update it.
+MAX_FAILED_CHARGES = 3
 
 DONATION_FREQUENCY_SELECTION = [
     ('one_time', 'One Time'),
@@ -434,6 +441,17 @@ class DonationRecurringRule(models.Model):
         ('cancelled', 'Cancelled'),
     ], string='Status', default='active', required=True, tracking=True)
 
+    failed_charge_count = fields.Integer(
+        string='Failed Charges', default=0, copy=False, readonly=True,
+        help='Declines in a row. The gift pauses after %s.' % MAX_FAILED_CHARGES,
+    )
+    charging_donation_id = fields.Many2one(
+        'donation.donation', string='Charge To Check', copy=False, readonly=True,
+        help='A charge was started for this donation but its result was never saved '
+             '(the server stopped mid-charge). The gift is not charged again until '
+             'someone checks the payment provider and clears this.',
+    )
+
     source_donation_id = fields.Many2one('donation.donation', string='Original Donation', readonly=True)
     donation_ids = fields.One2many('donation.donation', 'recurring_rule_id', string='Generated Donations')
     donation_count = fields.Integer(string='Donation Count', compute='_compute_donation_count')
@@ -450,24 +468,74 @@ class DonationRecurringRule(models.Model):
                 vals['name'] = self.env['ir.sequence'].next_by_code('donation.recurring.rule') or 'New'
         return super().create(vals_list)
 
+    def _auto_commit(self):
+        """Commit each charge on its own, except in tests."""
+        return not modules.module.current_test
+
     def action_process_recurring_donations(self):
         today = fields.Date.today()
         rules = self.search([
             ('state', '=', 'active'),
             ('next_donation_date', '<=', today),
         ])
+        auto_commit = self._auto_commit()
         for rule in rules:
-            try:
-                rule._create_recurring_donation()
-            except Exception as e:
-                rule.message_post(
-                    body=f"Failed to process recurring donation: {str(e)}",
-                    subject="Recurring Donation Error",
-                )
+            if rule.charging_donation_id:
+                rule._report_unfinished_charge()
+            else:
+                try:
+                    rule._create_recurring_donation()
+                except Exception as e:
+                    if auto_commit:
+                        self.env.cr.rollback()
+                    _logger.exception('Recurring donation %s failed', rule.name)
+                    rule.message_post(
+                        body=f"Failed to process recurring donation: {str(e)}",
+                        subject="Recurring Donation Error",
+                    )
+            # One gift's charge and its next date are saved together, before the
+            # next gift: a crash later in the run cannot undo a charge Helcim made.
+            if auto_commit:
+                self.env.cr.commit()
+
+    def _report_unfinished_charge(self):
+        self.ensure_one()
+        donation = self.charging_donation_id
+        tx = donation.payment_transaction_id
+        if tx and tx.state in ('done', 'authorized', 'pending'):
+            # The charge went through after all: record it and move on.
+            self.write({
+                'charging_donation_id': False,
+                'failed_charge_count': 0,
+                'next_donation_date': self._calculate_next_date(self.next_donation_date),
+            })
+            return
+        if self.activity_ids.filtered(lambda a: a.summary == _('Check unfinished charge')):
+            return
+        self.activity_schedule(
+            'mail.mail_activity_data_todo',
+            summary=_('Check unfinished charge'),
+            note=_(
+                'The charge for %(donation)s was interrupted and its result is unknown. '
+                'Check the payment provider: if the donor was charged, confirm the '
+                'donation; then clear "Charge To Check" on this gift so it resumes.',
+                donation=donation.display_name,
+            ),
+            user_id=self.create_uid.id or self.env.uid,
+        )
+
+    def action_clear_unfinished_charge(self):
+        self.write({'charging_donation_id': False})
+
+    def _charge_idempotency_key(self):
+        """One key per gift and due date, so a repeated attempt is the same charge."""
+        self.ensure_one()
+        db_uuid = self.env['ir.config_parameter'].sudo().get_param('database.uuid', '')
+        return '%s/donation.recurring.rule/%s/%s' % (db_uuid, self.id, self.next_donation_date)
 
     def _create_recurring_donation(self):
         self.ensure_one()
-        if self.state != 'active':
+        if self.state != 'active' or self.charging_donation_id:
             return False
 
         amount = self.amount
@@ -491,10 +559,25 @@ class DonationRecurringRule(models.Model):
             'payment_token_id': self.payment_token_id.id,
             'state': 'draft',
         })
+        # Saved before the charge: if the server stops mid-charge, the next run
+        # finds this mark and asks for a check instead of charging again.
+        self.charging_donation_id = donation
+        if self._auto_commit():
+            self.env.cr.commit()
 
-        if donation._process_token_payment():
-            self.next_donation_date = self._calculate_next_date(self.next_donation_date)
+        charged = donation.with_context(
+            helcim_idempotency_key=self._charge_idempotency_key(),
+        )._process_token_payment()
+        values = {'charging_donation_id': False}
+        if charged:
+            values.update(
+                next_donation_date=self._calculate_next_date(self.next_donation_date),
+                failed_charge_count=0,
+            )
+            self.write(values)
         else:
+            values['failed_charge_count'] = self.failed_charge_count + 1
+            self.write(values)
             self._handle_payment_failure(donation)
         return donation
 
@@ -525,6 +608,13 @@ class DonationRecurringRule(models.Model):
             body=f"Payment failed for recurring donation {donation.name}",
             subject="Recurring Donation Payment Failed",
         )
+        if self.failed_charge_count >= MAX_FAILED_CHARGES:
+            # Stop retrying a card that keeps failing; the donor resumes it
+            # from their portal after updating the payment method.
+            self.write({'state': 'paused', 'failed_charge_count': 0})
+            self.message_post(body=_(
+                'Paused after %s failed charges in a row.', MAX_FAILED_CHARGES,
+            ))
         template = self.env.ref(
             'donation_management.email_template_recurring_payment_failed',
             raise_if_not_found=False,
