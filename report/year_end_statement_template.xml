@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Replace OCA's placeholder receipt with a US year-end giving statement.
+         OCA's outer template already loops over docs, so print one record per call. -->
+    <template id="report_year_end_statement_document" inherit_id="donation_base.report_donationtaxreceipt_document">
+        <xpath expr="//t[@t-foreach='docs']" position="replace">
+            <t t-set="o" t-value="doc.with_context(lang=doc.partner_id.lang)"/>
+            <t t-call="web.external_layout">
+                <div class="page">
+                    <div class="row mb-4">
+                        <div class="col-7">
+                            <div t-field="o.partner_id"
+                                 t-options='{"widget": "contact", "fields": ["name", "address"], "no_marker": True}'/>
+                        </div>
+                        <div class="col-5 text-end">
+                            <div><strong>Statement:</strong> <span t-field="o.number"/></div>
+                            <div><strong>Date:</strong> <span t-field="o.date"/></div>
+                        </div>
+                    </div>
+
+                    <t t-if="o.type == 'annual'">
+                        <h2>Year-End Giving Statement</h2>
+                        <p>
+                            Gifts received
+                            <t t-if="o.period_start_date">from <span t-field="o.period_start_date"/></t>
+                            through <span t-field="o.donation_date"/>.
+                            Thank you for your generosity.
+                        </p>
+                        <table class="table table-sm o_main_table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Reference</th>
+                                    <th>Fund</th>
+                                    <th class="text-end">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="o.donation_ids.sorted(lambda d: (d.date, d.id))" t-as="gift">
+                                    <td><span t-out="gift.date" t-options='{"widget": "date"}'/></td>
+                                    <td><span t-field="gift.name"/></td>
+                                    <td><span t-out="gift.category_id.name or gift.campaign_id.name or ''"/></td>
+                                    <td class="text-end"><span t-field="gift.amount"/></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </t>
+                    <t t-else="">
+                        <h2>Donation Receipt</h2>
+                    </t>
+
+                    <div class="row justify-content-end">
+                        <div class="col-5">
+                            <table class="table table-sm">
+                                <tr class="border-black">
+                                    <td><strong>Total contributions</strong></td>
+                                    <td class="text-end"><strong><span t-field="o.amount"/></strong></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    <p t-if="o.company_id.donation_statement_note" class="mt-4" t-field="o.company_id.donation_statement_note"/>
+                    <p class="text-muted small">Please keep this statement for your tax records.</p>
+                </div>
+            </t>
+        </xpath>
+    </template>
+
+    <record id="donation_base.report_donation_tax_receipt" model="ir.actions.report">
+        <field name="name">Year-End Statement</field>
+        <field name="print_report_name">'Giving_Statement-' + (object.number or '').replace('/', '')</field>
+    </record>
+</odoo>

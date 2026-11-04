@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="mail_template_year_end_statement" model="mail.template">
+        <field name="name">Donation: Year-End Giving Statement</field>
+        <field name="model_id" ref="donation_base.model_donation_tax_receipt"/>
+        <field name="email_from">{{ (object.company_id.email_formatted or user.email_formatted) }}</field>
+        <field name="partner_to">{{ object.partner_id.id }}</field>
+        <field name="subject">{{ object.company_id.name }}: your giving statement {{ object.number or '' }}</field>
+        <field name="report_template_ids" eval="[(4, ref('donation_base.report_donation_tax_receipt'))]"/>
+        <field name="lang">{{ object.partner_id.lang }}</field>
+        <field name="auto_delete" eval="False"/>
+        <field name="body_html" type="html">
+            <div style="margin: 0px; padding: 0px; font-size: 13px;">
+                <p>Dear <t t-out="object.partner_id.name or ''">Donor</t>,</p>
+                <p>
+                    Thank you for your gifts to <t t-out="object.company_id.name or ''">our church</t>.
+                    Your giving statement is attached. It lists the gifts we received from you
+                    <t t-if="object.period_start_date">from <t t-out="format_date(object.period_start_date) or ''"/></t>
+                    through <t t-out="format_date(object.donation_date) or ''"/>, totaling
+                    <strong t-out="format_amount(object.amount, object.currency_id) or ''">$100.00</strong>.
+                </p>
+                <p>Please keep it for your tax records.</p>
+                <p>With gratitude,<br/><t t-out="object.company_id.name or ''"/></p>
+            </div>
+        </field>
+    </record>
+</odoo>

@@ -12,6 +12,7 @@
         * Donor portal for viewing donation history
         * Automatic recurring donation processing
         * Payment token support for saved cards
+        * Year-end giving statements (OCA donation_base annual receipts)
     """,
     'author': 'Jacob Neubaum',
     'website': 'https://www.automatejake.com',
@@ -22,6 +23,7 @@
         'payment_helcim',
         'portal',
         'account',
+        'donation_base',
     ],
     'data': [
         'security/donation_security.xml',
@@ -35,6 +37,9 @@
         'views/donation_website_templates.xml',
         'report/donation_receipt_template.xml',
         'report/donation_portal_report.xml',
+        'report/year_end_statement_template.xml',
+        'data/year_end_statement_mail.xml',
+        'views/year_end_statement_views.xml',
     ],
     'assets': {
         'web.assets_frontend': [

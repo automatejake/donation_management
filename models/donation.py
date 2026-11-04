@@ -116,6 +116,13 @@ class Donation(models.Model):
     ], string='Status', default='draft', required=True, tracking=True)
 
     tax_receipt_number = fields.Char(string='Tax Receipt Number', readonly=True, copy=False)
+    tax_receipt_id = fields.Many2one(
+        'donation.tax.receipt',
+        string='Year-End Statement',
+        readonly=True,
+        copy=False,
+        index=True,
+    )
     access_token = fields.Char('Access Token', copy=False)
 
     @api.depends('frequency')
@@ -204,7 +211,7 @@ class Donation(models.Model):
         vals = {'state': 'confirmed'}
         if not self.tax_receipt_number:
             vals['tax_receipt_number'] = (
-                self.env['ir.sequence'].next_by_code('donation.tax.receipt') or False
+                self.env['ir.sequence'].next_by_code('donation_management.gift.receipt') or False
             )
         if self.state != 'confirmed' or vals.get('tax_receipt_number'):
             self.with_context(skip_donation_complete=True).write(vals)
