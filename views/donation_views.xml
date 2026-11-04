@@ -69,6 +69,7 @@
                             <field name="campaign_id"/>
                             <field name="category_id"/>
                             <field name="tax_receipt_number" readonly="1"/>
+                            <field name="tax_receipt_id" invisible="not tax_receipt_id"/>
                         </group>
                     </group>
                     <group name="schedule_info" string="Schedule">

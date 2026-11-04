@@ -19,7 +19,7 @@
 
     <record id="seq_tax_receipt" model="ir.sequence">
         <field name="name">Tax Receipt Sequence</field>
-        <field name="code">donation.tax.receipt</field>
+        <field name="code">donation_management.gift.receipt</field>
         <field name="prefix">TR</field>
         <field name="padding">6</field>
         <field name="company_id" eval="False"/>

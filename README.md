@@ -12,6 +12,7 @@ A comprehensive donation management system for Odoo v18 Community Edition that e
 - **Donor Portal**: Self-service portal where donors can view history and manage recurring donations
 - **Campaign Management**: Create and track fundraising campaigns with goals and progress
 - **Tax Receipts**: Automatic generation of tax receipt numbers for donations
+- **Year-End Giving Statements**: One statement per donor listing every confirmed gift in a date range, as a PDF and by email (built on OCA `donation_base`)
 
 ### 💳 Payment Features
 - Support for all native Odoo payment providers
@@ -34,6 +35,16 @@ Donors can log in to:
 - Campaign creation and monitoring
 - Donor relationship management
 - Integration with Odoo accounting (optional invoice creation)
+
+## Year-End Giving Statements
+
+Donations > Donations > Year-End Statements.
+
+1. **Create Statements**: pick the date range (defaults to last calendar year). One statement is made per donor from their confirmed donations, using the donor's company if they have one. Donors whose "Tax Receipt Option" is set to "None" are skipped. A gift goes on at most one statement, and running it again for the same period is refused.
+2. **Email Statements**: select statements in the list and email them with the PDF attached. Donors with no email address are named so their statements can be printed instead.
+3. The note printed at the bottom (by default "No goods or services were provided in exchange for these contributions, other than intangible religious benefits.") can be changed per company under Settings > Companies > Donations.
+
+Statements use OCA `donation_base` (annual tax receipts). OCA's `donation` module can't be installed alongside this one, because both define `donation.donation`.
 
 ## Installation
 
