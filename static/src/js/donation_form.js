@@ -482,17 +482,14 @@ publicWidget.registry.DonationForm = publicWidget.Widget.extend({
     _updateHelcimPaymentFields: function () {
         const $details = this.$("#o_donation_helcim_payment_details");
         const $cardJs = this.$("#o_donation_helcim_card_js");
-        const $cardApi = this.$("#o_donation_helcim_card_api");
         const $ach = this.$("#o_donation_helcim_ach");
         const $save = this.$("#o_donation_helcim_save");
         if (!this._isHelcimNewMethodSelected()) {
             $details.addClass("d-none");
             $cardJs.addClass("d-none");
-            $cardApi.addClass("d-none");
             $ach.addClass("d-none");
             $save.addClass("d-none");
             this._setHelcimFieldRequired($cardJs, false);
-            this._setHelcimFieldRequired($cardApi, false);
             this._setHelcimFieldRequired($ach, false);
             return;
         }
@@ -501,23 +498,18 @@ publicWidget.registry.DonationForm = publicWidget.Widget.extend({
         $details.removeClass("d-none");
         if (mode === "helcimpay_js") {
             $cardJs.addClass("d-none");
-            $cardApi.addClass("d-none");
             $ach.addClass("d-none");
             $save.addClass("d-none");
             this._setHelcimFieldRequired($cardJs, false);
-            this._setHelcimFieldRequired($cardApi, false);
             this._setHelcimFieldRequired($ach, false);
             return;
         }
         const showCard = pmCode === "card";
         const showAch = pmCode === "ach_direct_debit";
         const showCardJs = showCard && mode === "helcim_js";
-        const showCardApi = showCard && mode === "direct_api";
         $cardJs.toggleClass("d-none", !showCardJs);
-        $cardApi.toggleClass("d-none", !showCardApi);
         $ach.toggleClass("d-none", !showAch);
         this._setHelcimFieldRequired($cardJs, showCardJs);
-        this._setHelcimFieldRequired($cardApi, showCardApi);
         this._setHelcimFieldRequired($ach, showAch);
         if (showAch) {
             const isCanada =

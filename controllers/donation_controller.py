@@ -566,15 +566,6 @@ class DonationWebsiteController(http.Controller):
         """Build payment payload for Helcim direct API from the donation form."""
         partner = donation.partner_id
         save = post.get('helcim_save_payment_method') == 'on' or donation.is_recurring
-        if payment_method.code == 'card':
-            return {
-                'type': 'card',
-                'card_number': post.get('helcim_card_number', ''),
-                'card_expiry': post.get('helcim_card_expiry', ''),
-                'card_cvv': post.get('helcim_card_cvv', ''),
-                'card_holder_name': post.get('helcim_card_holder_name') or partner.name,
-                'save_payment_method': save,
-            }
         if payment_method.code == 'ach_direct_debit':
             return {
                 'type': 'ach',
@@ -655,7 +646,6 @@ class DonationWebsiteController(http.Controller):
         return request.env['res.partner'].sudo().create({
             'name': post.get('name', 'Donor'),
             'email': email,
-            'phone': post.get('phone', ''),
         })
 
     def _redirect_to_confirmation(self, donation):
