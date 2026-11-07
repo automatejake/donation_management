@@ -11,7 +11,7 @@ from markupsafe import Markup
 from werkzeug.urls import url_encode, url_quote
 
 from odoo import http, fields, _
-from odoo.http import request
+from odoo.http import content_disposition, request
 from odoo.addons.payment import utils as payment_utils
 from odoo.addons.payment.controllers.portal import PaymentPortal
 from odoo.addons.payment.controllers.post_processing import PaymentPostProcessing
@@ -1024,7 +1024,10 @@ class DonationPortal(CustomerPortal):
             )
             if not report:
                 return request.redirect('/my/donations')
-            pdf_content, _report_format = report.sudo()._render_qweb_pdf(
+            # Donors can't read report records themselves; the gifts were already
+            # limited to their own above.
+            report = report.sudo()
+            pdf_content, _report_format = report._render_qweb_pdf(
                 report.report_name,
                 donations.ids,
                 data={'report_period_label': history['period_label']},
@@ -1032,6 +1035,7 @@ class DonationPortal(CustomerPortal):
             pdf_headers = [
                 ('Content-Type', 'application/pdf'),
                 ('Content-Length', len(pdf_content)),
+                ('Content-Disposition', content_disposition(filename_base + '.pdf')),
             ]
             return request.make_response(pdf_content, headers=pdf_headers)
 
@@ -1057,6 +1061,7 @@ class DonationPortal(CustomerPortal):
         csv_content = output.getvalue().encode('utf-8-sig')
         csv_headers = [
             ('Content-Type', 'text/csv; charset=utf-8'),
+            ('Content-Disposition', content_disposition(filename_base + '.csv')),
         ]
         return request.make_response(csv_content, headers=csv_headers)
 
