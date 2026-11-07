@@ -48,7 +48,7 @@ class DonationPledge(models.Model):
     )
     amount = fields.Monetary(string='Pledged', required=True, currency_field='currency_id', tracking=True)
     frequency = fields.Selection(
-        PLEDGE_FREQUENCY_SELECTION, string='Plans to Give', required=True, default='monthly',
+        PLEDGE_FREQUENCY_SELECTION, string='Plans to Give', required=True, default='monthly', tracking=True,
     )
     note = fields.Text(string='Note')
     date_start = fields.Date(related='campaign_id.start_date', string='Starts')
@@ -135,6 +135,16 @@ class DonationPledge(models.Model):
         for pledge in self:
             pledge.display_name = f'{pledge.campaign_id.name or ""}: {pledge.partner_id.name or ""}'
 
+    def _portal_can_edit(self):
+        """The donor may change this pledge on My Account: the setting is on and the campaign hasn't ended."""
+        self.ensure_one()
+        return (
+            self._pledges_enabled()
+            and self.company_id.donation_pledge_portal_edit
+            and self.campaign_id.end_date
+            and self.campaign_id.end_date >= fields.Date.context_today(self)
+        )
+
     def action_view_gifts(self):
         self.ensure_one()
         return {
@@ -195,8 +205,22 @@ class DonationCampaign(models.Model):
         }
 
 
+class ResCompany(models.Model):
+    _inherit = 'res.company'
+
+    donation_pledge_portal_edit = fields.Boolean(
+        string='Families Can Change Their Pledge Online',
+        default=True,
+        help='Show "Change my pledge" on My Account. Each change is logged on the pledge.',
+    )
+
+
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
+
+    donation_pledge_portal_edit = fields.Boolean(
+        related='company_id.donation_pledge_portal_edit', readonly=False,
+    )
 
     group_donation_pledges = fields.Boolean(
         string='Stewardship Pledges',

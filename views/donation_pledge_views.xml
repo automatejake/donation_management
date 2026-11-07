@@ -132,6 +132,11 @@
                                  help="Families pledge a yearly amount. The office sees who is on track, and each family sees its own progress on My Account.">
                             <field name="group_donation_pledges"/>
                         </setting>
+                        <setting id="donation_pledge_portal_edit" string="Families Can Change Their Pledge Online"
+                                 invisible="not group_donation_pledges"
+                                 help="Shows Change my pledge on My Account. Each change is logged on the pledge.">
+                            <field name="donation_pledge_portal_edit"/>
+                        </setting>
                     </block>
                 </app>
             </xpath>
@@ -142,6 +147,9 @@
     <template id="portal_my_donations_pledge" name="My Donations: stewardship pledge"
               inherit_id="donation_management.portal_my_donations">
         <xpath expr="//t[@t-if='recurring_rules']" position="before">
+            <div t-if="request.params.get('pledge_updated')" class="alert alert-success" role="status">
+                Your pledge is updated. Thank you!
+            </div>
             <t t-foreach="request.env['donation.pledge']._portal_pledges(request.env.user.partner_id)" t-as="pledge">
                 <div class="card mb-4 o_portal_donation_pledge">
                     <div class="card-header">
@@ -169,10 +177,58 @@
                         <p class="small text-muted mb-3">
                             <t t-out="int(pledge.progress)"/>% of your pledge so far. Thank you!
                         </p>
-                        <a t-if="pledge.remaining" href="/donate" class="btn btn-primary btn-sm">Give toward my pledge</a>
+                        <a t-if="pledge.remaining" href="/donate" class="btn btn-primary btn-sm me-2">Give toward my pledge</a>
+                        <a t-if="pledge._portal_can_edit()" t-attf-href="/my/pledges/#{pledge.id}/edit"
+                           class="btn btn-outline-secondary btn-sm">Change my pledge</a>
                     </div>
                 </div>
             </t>
         </xpath>
+    </template>
+
+    <template id="portal_pledge_edit" name="Change my pledge">
+        <t t-call="portal.portal_layout">
+            <t t-set="breadcrumbs_searchbar" t-value="False"/>
+            <div class="row justify-content-center">
+                <div class="col-lg-6">
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <h4 class="mb-0"><i class="fa fa-handshake-o me-2"/>Change my <t t-out="pledge.campaign_id.name"/> pledge</h4>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted">
+                                You have given <strong t-out="pledge.given" t-options="{'widget': 'monetary', 'display_currency': pledge.currency_id}"/>
+                                so far. Your gifts keep counting toward the new amount.
+                            </p>
+                            <div t-if="error == 'amount'" class="alert alert-danger" role="alert">
+                                Enter an amount above zero.
+                            </div>
+                            <form t-attf-action="/my/pledges/#{pledge.id}/edit" method="post">
+                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                <div class="mb-3">
+                                    <label for="pledge_amount" class="form-label">I pledge for the year</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text" t-out="pledge.currency_id.symbol"/>
+                                        <input id="pledge_amount" name="amount" type="number" min="1" step="0.01"
+                                               class="form-control" required="required" t-att-value="'%.2f' % pledge.amount"/>
+                                    </div>
+                                </div>
+                                <div class="mb-4">
+                                    <label for="pledge_frequency" class="form-label">I plan to give</label>
+                                    <select id="pledge_frequency" name="frequency" class="form-select">
+                                        <t t-foreach="frequencies" t-as="choice">
+                                            <option t-att-value="choice[0]" t-att-selected="choice[0] == pledge.frequency"
+                                                    t-out="choice[1]"/>
+                                        </t>
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn btn-primary me-2">Save my pledge</button>
+                                <a href="/my/donations" class="btn btn-link">Cancel</a>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </t>
     </template>
 </odoo>

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import re
 from datetime import date, datetime
 
 from psycopg2 import IntegrityError
@@ -180,3 +181,50 @@ class TestDonationPledgePortal(PledgeCommon, HttpCase):
     def test_no_card_without_a_pledge(self):
         self._enable(True)
         self.assertNotIn('o_portal_donation_pledge', self._page())
+
+    def _post_change(self, pledge, amount, frequency='weekly'):
+        self.authenticate('maria_pledge', 'maria_pledge_pw1')
+        # Any website page carries the session's CSRF token; a valid token
+        # makes sure a refused change is refused by the route, not by CSRF.
+        page = self.url_open('/my/donations').text
+        token = re.search(r'csrf_token["\']?\s*[:=]\s*["\']([0-9a-fo]+)', page).group(1)
+        return self.url_open(f'/my/pledges/{pledge.id}/edit', data={
+            'csrf_token': token, 'amount': amount, 'frequency': frequency,
+        })
+
+    def test_donor_changes_own_pledge(self):
+        self._enable(True)
+        pledge = self._pledge(self.maria, 1200.0)
+        self.assertIn(f'/my/pledges/{pledge.id}/edit', self._page())
+        response = self._post_change(pledge, '1500', 'weekly')
+        self.assertIn('pledge_updated=1', response.url)
+        pledge.invalidate_recordset()
+        self.assertEqual(pledge.amount, 1500.0)
+        self.assertEqual(pledge.frequency, 'weekly')
+        self.assertTrue(pledge.message_ids.filtered(lambda m: 'Changed online' in (m.body or '')))
+
+    def test_zero_amount_is_refused(self):
+        self._enable(True)
+        pledge = self._pledge(self.maria, 1200.0)
+        response = self._post_change(pledge, '0')
+        self.assertIn('error=amount', response.url)
+        pledge.invalidate_recordset()
+        self.assertEqual(pledge.amount, 1200.0)
+
+    def test_cannot_change_someone_elses_pledge(self):
+        self._enable(True)
+        other = self._pledge(self.george, 800.0)
+        self._post_change(other, '1')
+        other.invalidate_recordset()
+        self.assertEqual(other.amount, 800.0)
+
+    def test_setting_off_hides_and_blocks_changes(self):
+        self._enable(True)
+        self.company.donation_pledge_portal_edit = False
+        pledge = self._pledge(self.maria, 1200.0)
+        page = self._page()
+        self.assertIn('o_portal_donation_pledge', page)
+        self.assertNotIn(f'/my/pledges/{pledge.id}/edit', page)
+        self._post_change(pledge, '50')
+        pledge.invalidate_recordset()
+        self.assertEqual(pledge.amount, 1200.0)
