@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Donation Management',
-    'version': '18.0.1.2.0',
+    'version': '18.0.1.3.0',
     'category': 'Website/Website',
     'summary': 'Manage online donations with recurring payments',
     'description': """
@@ -12,6 +12,7 @@
         * Donor portal for viewing donation history
         * Automatic recurring donation processing
         * Payment token support for saved cards
+        * Offering batches: enter a Sunday's envelopes, checks and cash on one screen
         * Year-end giving statements (OCA donation_base annual receipts)
     """,
     'author': 'Jacob Neubaum',
@@ -40,6 +41,9 @@
         'report/year_end_statement_template.xml',
         'data/year_end_statement_mail.xml',
         'views/year_end_statement_views.xml',
+        'data/donation_batch_data.xml',
+        'data/donation_batch_partner.xml',
+        'views/donation_batch_views.xml',
     ],
     'assets': {
         'web.assets_frontend': [
