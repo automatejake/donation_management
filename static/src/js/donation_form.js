@@ -82,11 +82,14 @@ publicWidget.registry.DonationForm = publicWidget.Widget.extend({
     },
     _getPaymentModal: function () {
         const modalEl = document.getElementById("o_donation_payment_modal");
-        if (!modalEl || !window.bootstrap?.Modal) {
+        // Odoo 18's website loads Bootstrap's Modal as window.Modal; there is
+        // no window.bootstrap, so the payment details window never opened.
+        const Modal = window.bootstrap?.Modal || window.Modal;
+        if (!modalEl || !Modal) {
             return null;
         }
         if (!this._paymentModal) {
-            this._paymentModal = window.bootstrap.Modal.getOrCreateInstance(modalEl);
+            this._paymentModal = Modal.getOrCreateInstance(modalEl);
         }
         return this._paymentModal;
     },
