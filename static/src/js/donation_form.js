@@ -1,9 +1,6 @@
 /** @odoo-module **/
 import publicWidget from "@web/legacy/js/public/public_widget";
 import { _t } from "@web/core/l10n/translation";
-import { rpc } from "@web/core/network/rpc";
-const HELCIM_JS_SCRIPT_URL = "https://secure.myhelcim.com/js/version2.js";
-const HELCIM_PAY_SCRIPT_URL = "https://secure.helcim.app/helcim-pay/services/start.js";
 const PICKER_ICON_CLASSES = {
     "credit-card": "fa-credit-card",
     university: "fa-university",
@@ -27,8 +24,6 @@ publicWidget.registry.DonationForm = publicWidget.Widget.extend({
         this.defaultFeePercent = parseFloat(this.el.dataset.defaultFeePercent || "3.0");
         this.isPublicUser = this.el.dataset.isPublic === "1";
         this.feePercent = this.defaultFeePercent;
-        this._helcimJsScriptPromise = null;
-        this._helcimPayScriptPromise = null;
         this._submitInProgress = false;
         this._paymentModal = null;
         this._super.apply(this, arguments);
@@ -37,11 +32,8 @@ publicWidget.registry.DonationForm = publicWidget.Widget.extend({
         this._resizeAmountInput();
         this._syncFeePercentFromSelection();
         this._updateCoverFeesSummary();
-        this._updateHelcimPaymentFields();
+        this._updateProviderPaymentFields();
         this._initPaymentPicker();
-        if (this.el.dataset.helcimJsToken) {
-            this._loadHelcimJsScript().catch(() => {});
-        }
     },
     // -------------------------------------------------------------------------
     // Payment method dropdown + modal
@@ -91,7 +83,7 @@ publicWidget.registry.DonationForm = publicWidget.Widget.extend({
         return this._paymentModal;
     },
     _openPaymentModal: function () {
-        this._updateHelcimPaymentFields();
+        this._updateProviderPaymentFields();
         this._updatePaymentModalIntro();
         const modal = this._getPaymentModal();
         if (modal) {
@@ -116,26 +108,7 @@ publicWidget.registry.DonationForm = publicWidget.Widget.extend({
         if (!$selected.length || !this._isNewPaymentMethod($selected)) {
             return true;
         }
-        if (!this._isHelcimNewMethodSelected()) {
-            return true;
-        }
-        if (this._getHelcimCheckoutMode() === "helcimpay_js") {
-            return true;
-        }
-        const $fields = this.$("#o_donation_helcim_payment_details")
-            .find("input, select")
-            .filter(function () {
-                return !this.closest(".d-none");
-            });
-        for (const el of $fields) {
-            if (!el.checkValidity()) {
-                if (report) {
-                    el.reportValidity();
-                }
-                return false;
-            }
-        }
-        return true;
+        return this._validateProviderPaymentFields(report);
     },
     _updatePaymentModalIntro: function () {
         const $intro = this.$("#o_donation_payment_modal_intro");
@@ -144,14 +117,7 @@ publicWidget.registry.DonationForm = publicWidget.Widget.extend({
             $intro.addClass("d-none").text("");
             return;
         }
-        if (this._isHelcimNewMethodSelected()) {
-            $intro.addClass("d-none").text("");
-            const pmCode = $selected.data("paymentMethodCode") || "";
-            const title =
-                pmCode === "ach_direct_debit"
-                    ? _t("Bank account details")
-                    : _t("Card details");
-            this.$("#o_donation_payment_modal_label").text(title);
+        if (this._updateProviderModalIntro($selected)) {
             return;
         }
         const methodName = $selected.data("pickerTitle") || _t("this method");
@@ -210,61 +176,9 @@ publicWidget.registry.DonationForm = publicWidget.Widget.extend({
             this._openPaymentModal();
             return;
         }
-        if (this._shouldUseHelcimPayJs()) {
-            ev.preventDefault();
-            await this._processHelcimPayDonation();
-            return;
-        }
-        if (!this._shouldUseHelcimJs()) {
-            return;
-        }
-        ev.preventDefault();
-        if (this._submitInProgress) {
-            return;
-        }
-        if (!this.el.reportValidity()) {
-            return;
-        }
-        if (!this.el.dataset.helcimJsToken) {
-            window.location = "/donate?error=helcim_js_not_configured";
-            return;
-        }
-        this._submitInProgress = true;
-        const $submit = this.$('button[type="submit"]');
-        $submit.prop("disabled", true);
-        try {
-            await this._loadHelcimJsScript();
-            if (typeof window.helcimProcess !== "function") {
-                throw new Error(_t("Helcim.js did not load. Check your connection and try again."));
-            }
-            const payload = this._serializeForm();
-            const result = await rpc("/donate/prepare_helcim_js", payload);
-            if (result.error) {
-                const msg = result.message || result.error;
-                window.location = `/donate?error=${encodeURIComponent(msg)}`;
-                return;
-            }
-            this.el.action = "/donate/helcim_js_complete";
-            this.$("#o_donation_helcim_donation_id").val(result.donation_id);
-            this.$("#o_donation_helcim_access_token").val(result.access_token || "");
-            const helcimAmount =
-                result.operation === "validation"
-                    ? Number(result.amount).toFixed(2)
-                    : Number(result.amount).toFixed(2);
-            this.$("#amount").val(helcimAmount);
-            this.$("#customerCode").val(result.customer_code || "");
-            this.$("#test").val("0");
-            if (typeof window.helcimProcess !== "function") {
-                throw new Error(_t("Helcim.js is not ready. Please try again."));
-            }
-            window.helcimProcess();
-        } catch (error) {
-            const message =
-                error.data?.message || error.message || _t("Could not start payment.");
-            window.location = `/donate?error=${encodeURIComponent(message)}`;
-        } finally {
-            this._submitInProgress = false;
-            $submit.prop("disabled", false);
+        const providerSubmit = this._handleProviderSubmit(ev);
+        if (providerSubmit) {
+            await providerSubmit;
         }
     },
     _serializeForm: function () {
@@ -282,253 +196,40 @@ publicWidget.registry.DonationForm = publicWidget.Widget.extend({
         }
         return data;
     },
-    _shouldUseHelcimJs: function () {
-        if (!this._isHelcimNewMethodSelected()) {
-            return false;
-        }
-        const pmCode = this._getSelectedPaymentInput().data("paymentMethodCode");
-        return (
-            pmCode === "card" && this._getHelcimCheckoutMode() === "helcim_js"
-        );
-    },
-    _shouldUseHelcimPayJs: function () {
-        return (
-            this._isHelcimNewMethodSelected()
-            && this._getHelcimCheckoutMode() === "helcimpay_js"
-        );
-    },
-    _processHelcimPayDonation: async function () {
-        if (this._submitInProgress) {
-            return;
-        }
-        if (!this.el.reportValidity()) {
-            return;
-        }
-        this._submitInProgress = true;
-        const $submit = this.$('button[type="submit"]');
-        $submit.prop("disabled", true);
-        try {
-            const payload = this._serializeForm();
-            const prepared = await rpc("/donate/prepare_helcim_pay", payload);
-            if (prepared.error) {
-                const msg = prepared.message || prepared.error;
-                window.location = `/donate?error=${encodeURIComponent(msg)}`;
-                return;
-            }
-            await this._runHelcimPayCheckout({
-                reference: prepared.reference,
-                paymentMethodCode: prepared.payment_method_code,
-                tokenize: prepared.tokenize,
-                donationId: prepared.donation_id,
-                accessToken: prepared.access_token,
-            });
-        } catch (error) {
-            const message =
-                error.data?.message || error.message || _t("Could not start payment.");
-            window.location = `/donate?error=${encodeURIComponent(message)}`;
-        } finally {
-            this._submitInProgress = false;
-            $submit.prop("disabled", false);
-        }
-    },
-    _runHelcimPayCheckout: async function (options) {
-        const init = await rpc("/payment/helcim/initialize_checkout", {
-            reference: options.reference,
-            payment_method: options.paymentMethodCode,
-            tokenization_requested: options.tokenize,
-        });
-        if (!init || !init.success) {
-            throw new Error(init?.error_message || _t("Payment initialization failed."));
-        }
-        await this._loadHelcimPayScript();
-        if (typeof window.appendHelcimPayIframe !== "function") {
-            throw new Error(_t("HelcimPay.js did not load. Please try again."));
-        }
-        await window.appendHelcimPayIframe(init.checkoutToken, true);
-        const checkoutToken = init.checkoutToken;
-        const handler = async (event) => {
-            const eventKey = "helcim-pay-js-" + checkoutToken;
-            if (event.data?.eventName !== eventKey) {
-                return;
-            }
-            if (event.data.eventStatus === "SUCCESS") {
-                window.removeEventListener("message", handler);
-                try {
-                    const status = await rpc("/payment/helcim/process_payment_status", {
-                        reference: options.reference,
-                        event_status: event.data.eventStatus,
-                        event_message: event.data.eventMessage,
-                        tokenization_requested: options.tokenize,
-                    });
-                    if (status?.status !== "success") {
-                        throw new Error(status?.message || _t("Payment was declined."));
-                    }
-                    const donationId = status.donation_id || options.donationId;
-                    const accessToken = encodeURIComponent(
-                        status.access_token || options.accessToken || ""
-                    );
-                    window.location = `/donate/confirmation/${donationId}?access_token=${accessToken}`;
-                } catch (error) {
-                    console.error("HelcimPay donation status error:", error);
-                    const message =
-                        error.data?.message || error.message || _t("Payment failed.");
-                    window.location = `/donate?error=${encodeURIComponent(message)}`;
-                }
-                return;
-            }
-            if (event.data.eventStatus === "HIDE") {
-                window.removeEventListener("message", handler);
-            }
-        };
-        window.addEventListener("message", handler);
-    },
-    _loadHelcimPayScript: function () {
-        if (typeof window.appendHelcimPayIframe === "function") {
-            return Promise.resolve();
-        }
-        if (this._helcimPayScriptPromise) {
-            return this._helcimPayScriptPromise;
-        }
-        this._helcimPayScriptPromise = new Promise((resolve, reject) => {
-            const existing = document.querySelector(`script[src="${HELCIM_PAY_SCRIPT_URL}"]`);
-            if (existing) {
-                existing.addEventListener("load", () => resolve());
-                existing.addEventListener("error", () =>
-                    reject(new Error("HelcimPay.js failed to load."))
-                );
-                return;
-            }
-            const script = document.createElement("script");
-            script.type = "text/javascript";
-            script.src = HELCIM_PAY_SCRIPT_URL;
-            script.onload = () => resolve();
-            script.onerror = () => {
-                this._helcimPayScriptPromise = null;
-                reject(new Error("HelcimPay.js failed to load."));
-            };
-            document.head.appendChild(script);
-        });
-        return this._helcimPayScriptPromise;
-    },
-    _getHelcimCheckoutMode: function () {
-        const $selected = this._getSelectedPaymentInput();
-        if ($selected.length && $selected.data("helcimCheckoutMode")) {
-            return $selected.data("helcimCheckoutMode");
-        }
-        return this.el.dataset.helcimCheckoutMode || "helcim_js";
-    },
-    _loadHelcimJsScript: function () {
-        if (typeof window.helcimProcess === "function") {
-            return Promise.resolve();
-        }
-        if (this._helcimJsScriptPromise) {
-            return this._helcimJsScriptPromise;
-        }
-        this._helcimJsScriptPromise = new Promise((resolve, reject) => {
-            const existing = document.querySelector(`script[src="${HELCIM_JS_SCRIPT_URL}"]`);
-            if (existing) {
-                existing.addEventListener("load", () => resolve());
-                existing.addEventListener("error", () => reject(new Error("Helcim.js failed to load.")));
-                return;
-            }
-            const script = document.createElement("script");
-            script.type = "text/javascript";
-            script.src = HELCIM_JS_SCRIPT_URL;
-            script.onload = () => resolve();
-            script.onerror = () => {
-                this._helcimJsScriptPromise = null;
-                reject(new Error("Helcim.js failed to load."));
-            };
-            document.head.appendChild(script);
-        });
-        return this._helcimJsScriptPromise;
-    },
     // -------------------------------------------------------------------------
-    // Helcim payment fields visibility
+    // Payment provider hooks: a provider's bridge module overrides these to
+    // add its own fields and checkout.
     // -------------------------------------------------------------------------
+    /** Show or hide the provider's own payment fields for the selected method. */
+    _updateProviderPaymentFields: function () {},
+    /** Check the provider's own fields; return false to keep the modal open. */
+    _validateProviderPaymentFields: function (report) {
+        return true;
+    },
+    /** Set the payment modal's title and intro; return true when handled. */
+    _updateProviderModalIntro: function ($selected) {
+        return false;
+    },
+    /**
+     * Take over the submit for the selected method: call ev.preventDefault()
+     * before any await and return a promise, or return false to let the form
+     * post normally.
+     */
+    _handleProviderSubmit: function (ev) {
+        return false;
+    },
     _onPaymentMethodChange: function () {
         this._syncFeePercentFromSelection();
         this._updateCoverFeesSummary();
-        this._updateHelcimPaymentFields();
+        this._updateProviderPaymentFields();
         this._updatePaymentPickerDisplay();
-        if (this._shouldUseHelcimJs()) {
-            this._loadHelcimJsScript().catch(() => {});
-        }
     },
     _getSelectedPaymentInput: function () {
         return this.$("input[name='payment_method']:checked");
     },
-    _isHelcimNewMethodSelected: function () {
-        const $selected = this._getSelectedPaymentInput();
-        if (!$selected.length) {
-            return false;
-        }
-        const value = String($selected.val() || "");
-        return $selected.data("providerCode") === "helcim" && value.startsWith("method_");
-    },
     _isRecurringDonation: function () {
         const frequency = this.$("input[name='frequency']:checked").val();
         return frequency && frequency !== "one_time";
-    },
-    _setHelcimFieldRequired: function ($container, required) {
-        $container.find("input, select").each(function () {
-            if (required) {
-                this.setAttribute("required", "required");
-            } else {
-                this.removeAttribute("required");
-            }
-        });
-    },
-    _updateHelcimPaymentFields: function () {
-        const $details = this.$("#o_donation_helcim_payment_details");
-        const $cardJs = this.$("#o_donation_helcim_card_js");
-        const $ach = this.$("#o_donation_helcim_ach");
-        const $save = this.$("#o_donation_helcim_save");
-        if (!this._isHelcimNewMethodSelected()) {
-            $details.addClass("d-none");
-            $cardJs.addClass("d-none");
-            $ach.addClass("d-none");
-            $save.addClass("d-none");
-            this._setHelcimFieldRequired($cardJs, false);
-            this._setHelcimFieldRequired($ach, false);
-            return;
-        }
-        const pmCode = this._getSelectedPaymentInput().data("paymentMethodCode") || "";
-        const mode = this._getHelcimCheckoutMode();
-        $details.removeClass("d-none");
-        if (mode === "helcimpay_js") {
-            $cardJs.addClass("d-none");
-            $ach.addClass("d-none");
-            $save.addClass("d-none");
-            this._setHelcimFieldRequired($cardJs, false);
-            this._setHelcimFieldRequired($ach, false);
-            return;
-        }
-        const showCard = pmCode === "card";
-        const showAch = pmCode === "ach_direct_debit";
-        const showCardJs = showCard && mode === "helcim_js";
-        $cardJs.toggleClass("d-none", !showCardJs);
-        $ach.toggleClass("d-none", !showAch);
-        this._setHelcimFieldRequired($cardJs, showCardJs);
-        this._setHelcimFieldRequired($ach, showAch);
-        if (showAch) {
-            const isCanada =
-                (this.el.dataset.partnerCountry || "").toUpperCase() === "CA";
-            this.$(".o_donation_helcim_ach_us").toggleClass("d-none", isCanada);
-            this.$(".o_donation_helcim_ach_ca").toggleClass("d-none", !isCanada);
-            this.$("#helcim_bank_routing").prop("required", !isCanada);
-            this.$("#helcim_bank_financial, #helcim_bank_transit").prop(
-                "required",
-                isCanada
-            );
-        }
-        const recurring = this._isRecurringDonation();
-        if (recurring) {
-            $save.addClass("d-none");
-            this.$("#helcim_save_payment_method").prop("checked", true);
-        } else {
-            $save.toggleClass("d-none", !showCard);
-        }
     },
     // -------------------------------------------------------------------------
     // Donation form behaviour
@@ -551,7 +252,7 @@ publicWidget.registry.DonationForm = publicWidget.Widget.extend({
             $startOptions.slideUp();
             $startDate.prop("required", false);
         }
-        this._updateHelcimPaymentFields();
+        this._updateProviderPaymentFields();
     },
     _onRecurringStartDateChange: function () {
         const $hint = this.$("#recurring_start_hint");

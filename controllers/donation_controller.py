@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import csv
-import hmac
 import io
 import logging
 import re
@@ -8,7 +7,7 @@ from calendar import monthrange
 from datetime import datetime
 
 from markupsafe import Markup
-from werkzeug.urls import url_encode, url_quote
+from werkzeug.urls import url_encode
 
 from odoo import http, fields, _
 from odoo.http import content_disposition, request
@@ -203,11 +202,8 @@ class DonationWebsiteController(http.Controller):
         payment_tokens = self._get_payment_tokens(partner, providers)
         payment_options = self._get_donation_payment_options(partner)
         default_fee_percent = self._get_default_fee_coverage_percent()
-        helcim_provider = self._get_compatible_providers(partner).filtered(
-            lambda p: p.code == 'helcim',
-        )[:1]
 
-        return request.render('donation_management.donation_form_page', {
+        values = {
             'campaigns': campaigns,
             'categories': categories,
             'payment_options': payment_options,
@@ -216,16 +212,13 @@ class DonationWebsiteController(http.Controller):
             'error': kwargs.get('error'),
             'success': kwargs.get('success'),
             'default_fee_percent': default_fee_percent,
-            'helcim_checkout_mode': (
-                helcim_provider.helcim_checkout_mode if helcim_provider else False
-            ),
-            'helcim_js_config_token': (
-                helcim_provider.helcim_js_config_token if helcim_provider else False
-            ),
-            'helcim_provider_state': (
-                helcim_provider.state if helcim_provider else False
-            ),
-        })
+        }
+        values.update(self._donation_form_provider_values(partner, providers))
+        return request.render('donation_management.donation_form_page', values)
+
+    def _donation_form_provider_values(self, partner, providers):
+        """Extra values a payment provider's bridge module adds to the /donate page."""
+        return {}
 
     @http.route('/donate/tokens', type='json', auth='public')
     def donation_tokens(self, email=None):
@@ -393,243 +386,18 @@ class DonationWebsiteController(http.Controller):
             donation.unlink()
             return request.redirect('/donate?error=invalid_payment_method')
 
-        if provider.code == 'helcim':
-            if (
-                provider.helcim_checkout_mode == 'helcim_js'
-                and payment_method.code == 'card'
-            ):
-                donation.unlink()
-                return request.redirect('/donate?error=helcim_js_required')
-            if provider.helcim_checkout_mode == 'helcimpay_js':
-                return self._redirect_to_payment(donation, provider, payment_method, post)
-            return self._pay_with_helcim_api(donation, provider, payment_method, post)
-
+        response = self._pay_with_provider(donation, provider, payment_method, post)
+        if response is not None:
+            return response
         return self._redirect_to_payment(donation, provider, payment_method, post)
 
-    @http.route('/donate/prepare_helcim_js', type='json', auth='public')
-    def donation_prepare_helcim_js(self, **post):
-        """Create donation + transaction; return data for Helcim.js checkout."""
-        try:
-            donation = self._create_donation_from_post(post)
-        except ValueError as exc:
-            return {'error': str(exc.args[0])}
+    def _pay_with_provider(self, donation, provider, payment_method, post):
+        """Hook for a provider's bridge module to take a new payment itself.
 
-        provider, payment_method = self._resolve_payment_selection(
-            post, donation.partner_id, donation.amount,
-        )
-        if (
-            not provider
-            or not payment_method
-            or provider.code != 'helcim'
-            or provider.helcim_checkout_mode != 'helcim_js'
-            or payment_method.code != 'card'
-        ):
-            donation.unlink()
-            return {'error': 'invalid_provider'}
-        if not provider.helcim_js_config_token:
-            donation.unlink()
-            return {
-                'error': 'helcim_js_not_configured',
-                'message': _(
-                    'Helcim.js is not configured. Add a Helcim.js Configuration '
-                    'Token on the Helcim payment provider.'
-                ),
-            }
-
-        try:
-            tx, payment_method, operation = self._create_donation_payment_transaction(
-                donation, provider, payment_method,
-            )
-        except ValidationError as exc:
-            donation.unlink()
-            return {'error': 'no_payment_method', 'message': exc.args[0]}
-
-        customer_vals = provider._helcim_get_customer_code(donation.partner_id)
-        if customer_vals.get('errorMessage'):
-            donation.unlink()
-            return {'error': 'invalid_provider', 'message': customer_vals['errorMessage']}
-
-        donation_sudo = donation.sudo()
-        donation_sudo._portal_ensure_token()
-        return {
-            'donation_id': donation.id,
-            'access_token': donation_sudo.access_token,
-            'amount': tx.amount,
-            'customer_code': customer_vals.get('customerCode'),
-            'tokenize': bool(tx.tokenize),
-            'operation': operation,
-        }
-
-    @http.route('/donate/prepare_helcim_pay', type='json', auth='public')
-    def donation_prepare_helcim_pay(self, **post):
-        """Create donation + transaction; return data for HelcimPay.js checkout."""
-        try:
-            donation = self._create_donation_from_post(post)
-        except ValueError as exc:
-            return {'error': str(exc.args[0])}
-
-        provider, payment_method = self._resolve_payment_selection(
-            post, donation.partner_id, donation.amount,
-        )
-        if (
-            not provider
-            or not payment_method
-            or provider.code != 'helcim'
-            or provider.helcim_checkout_mode != 'helcimpay_js'
-        ):
-            donation.unlink()
-            return {'error': 'invalid_provider'}
-
-        try:
-            tx, payment_method, operation = self._create_donation_payment_transaction(
-                donation, provider, payment_method,
-            )
-        except ValidationError as exc:
-            donation.unlink()
-            return {'error': 'no_payment_method', 'message': exc.args[0]}
-
-        donation_sudo = donation.sudo()
-        donation_sudo._portal_ensure_token()
-        return {
-            'donation_id': donation_sudo.id,
-            'reference': tx.reference,
-            'access_token': donation_sudo.access_token,
-            'payment_method_code': payment_method.code,
-            'tokenize': bool(tx.tokenize),
-            'operation': operation,
-        }
-
-    @http.route(
-        '/donate/helcim_js_complete',
-        type='http',
-        auth='public',
-        website=True,
-        methods=['POST'],
-        csrf=True,
-    )
-    def donation_helcim_js_complete(self, **post):
-        """Complete a donation after Helcim.js processed the card in the browser."""
-        try:
-            donation_id = int(post.get('donation_id') or 0)
-        except (TypeError, ValueError):
-            return request.redirect('/donate?error=invalid_payment')
-
-        donation = request.env['donation.donation'].sudo().browse(donation_id).exists()
-        if not donation or donation.state not in ('draft', 'pending'):
-            return request.redirect('/donate?error=invalid_payment')
-        # Only the browser that started this checkout holds the donation's token.
-        access_token = str(post.get('access_token') or '')
-        if not donation.access_token or not hmac.compare_digest(donation.access_token, access_token):
-            return request.redirect('/donate?error=invalid_payment')
-
-        tx = donation.payment_transaction_id
-        if not tx or tx.provider_code != 'helcim' or tx.state not in ('draft', 'pending'):
-            return request.redirect('/donate?error=invalid_payment')
-
-        tokenize = (
-            post.get('helcim_save_payment_method') == 'on'
-            or donation.is_recurring
-        )
-        try:
-            tx._helcim_process_js_post(post, tokenize=tokenize)
-        except ValidationError as exc:
-            donation.unlink()
-            return request.redirect(
-                '/donate?error=%s' % url_quote(str(exc.args[0])),
-            )
-        except Exception:
-            _logger.exception('Helcim.js payment failed for %s', tx.reference)
-            donation.unlink()
-            return request.redirect('/donate?error=invalid_payment')
-
-        if tx.state == 'done':
-            tx._post_process()
-            _logger.info(
-                'Donation %s paid via Helcim.js — search transaction ID %s in Helcim '
-                '(Payments → Test Transactions if the provider is in test mode).',
-                donation.name,
-                tx.provider_reference or '?',
-            )
-            return self._redirect_to_confirmation(donation)
-        if tx.state == 'pending':
-            donation.write({'state': 'pending'})
-            return request.redirect('/payment/status')
-        if tx.state == 'error':
-            msg = tx.state_message or _('Payment was declined.')
-            donation.unlink()
-            return request.redirect('/donate?error=%s' % url_quote(msg))
-
-        donation.unlink()
-        return request.redirect('/donate?error=invalid_payment')
-
-    def _extract_helcim_payment_data(self, post, payment_method, donation):
-        """Build payment payload for Helcim direct API from the donation form."""
-        partner = donation.partner_id
-        save = post.get('helcim_save_payment_method') == 'on' or donation.is_recurring
-        if payment_method.code == 'ach_direct_debit':
-            return {
-                'type': 'ach',
-                'bank_account_number': post.get('helcim_bank_account_number', ''),
-                'bank_routing': post.get('helcim_bank_routing', ''),
-                'bank_financial': post.get('helcim_bank_financial', ''),
-                'bank_transit': post.get('helcim_bank_transit', ''),
-                'bank_account_type': post.get('helcim_bank_account_type', '1'),
-                'bank_holder_type': post.get('helcim_bank_holder_type', '1'),
-                'bank_account_holder': post.get('helcim_bank_account_holder') or partner.name,
-                'bank_street': post.get('helcim_bank_street') or partner.street,
-                'bank_city': post.get('helcim_bank_city') or partner.city,
-                'bank_zip': post.get('helcim_bank_zip') or partner.zip,
-                'bank_state': post.get('helcim_bank_state') or (
-                    partner.state_id.code if partner.state_id else ''
-                ),
-                'bank_country': partner.country_id.code if partner.country_id else 'US',
-                'save_payment_method': save,
-            }
-        raise ValidationError(_('Unsupported Helcim payment method.'))
-
-    def _pay_with_helcim_api(self, donation, provider, payment_method, post):
-        """Process donation payment through the Helcim Payment API (native form)."""
-        try:
-            payment_data = self._extract_helcim_payment_data(post, payment_method, donation)
-        except ValidationError as exc:
-            donation.unlink()
-            return request.redirect(
-                '/donate?error=%s' % url_quote(str(exc.args[0])),
-            )
-
-        try:
-            tx, payment_method, operation = self._create_donation_payment_transaction(
-                donation, provider, payment_method,
-            )
-        except ValidationError:
-            donation.unlink()
-            return request.redirect('/donate?error=no_payment_method')
-
-        try:
-            tx._helcim_process_direct_payment(payment_data)
-        except ValidationError as exc:
-            donation.unlink()
-            return request.redirect(
-                '/donate?error=%s' % url_quote(str(exc.args[0])),
-            )
-        except Exception:
-            _logger.exception('Helcim direct API payment failed for %s', tx.reference)
-            donation.unlink()
-            return request.redirect('/donate?error=invalid_payment')
-
-        if tx.state == 'done':
-            tx._post_process()
-            return self._redirect_to_confirmation(donation)
-        if tx.state == 'pending':
-            donation.write({'state': 'pending'})
-            return request.redirect('/payment/status')
-        if tx.state == 'error':
-            msg = tx.state_message or _('Payment was declined.')
-            donation.unlink()
-            return request.redirect('/donate?error=%s' % url_quote(msg))
-
-        donation.unlink()
-        return request.redirect('/donate?error=invalid_payment')
+        Return a response to use it, or None to go through Odoo's standard
+        payment flow (redirect or inline form of the provider).
+        """
+        return None
 
     def _get_or_create_partner(self, post):
         if not request.env.user._is_public():
@@ -740,20 +508,11 @@ class DonationWebsiteController(http.Controller):
             and not redirect_html
             and operation in ('online_direct', 'validation')
         )
-        helcim_pay_autostart = (
-            provider.code == 'helcim'
-            and provider.helcim_checkout_mode == 'helcimpay_js'
-            and operation in ('online_direct', 'validation')
-        )
-        if helcim_pay_autostart:
-            donation.sudo()._portal_ensure_token()
-
         return request.render('donation_management.donation_payment_redirect', {
             'tx': tx,
             'donation': donation,
             'redirect_form_html': redirect_html,
             'demo_direct': demo_direct,
-            'helcim_pay_autostart': helcim_pay_autostart,
             'payment_method': payment_method,
         })
 

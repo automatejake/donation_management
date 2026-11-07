@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Donation Management',
-    'version': '18.0.1.4.0',
+    'version': '18.0.1.5.0',
     'category': 'Website/Website',
     'summary': 'Manage online donations with recurring payments',
     'description': """
         Donation Management Module
         ===========================
         * Accept one-time and recurring donations via website
-        * Integrate with Odoo payment providers
+        * Works with any Odoo payment provider (Helcim through the donation_management_helcim bridge)
         * Donor portal for viewing donation history
         * Automatic recurring donation processing
         * Payment token support for saved cards
@@ -22,7 +22,6 @@
         'base',
         'website',
         'payment',
-        'payment_helcim',
         'portal',
         'account',
         'donation_base',
@@ -51,7 +50,6 @@
     'assets': {
         'web.assets_frontend': [
             'donation_management/static/src/js/donation_form.js',
-            'donation_management/static/src/js/donation_helcim_pay_redirect.js',
             'donation_management/static/src/css/donation.css',
         ],
     },
