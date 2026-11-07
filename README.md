@@ -36,6 +36,16 @@ Donors can log in to:
 - Donor relationship management
 - Integration with Odoo accounting (optional invoice creation)
 
+## Offering Batches (Sunday envelopes, checks and cash)
+
+Donations > Donations > Offering Batches.
+
+1. **New**: pick the date, the bank account it will be deposited to, the default fund, and type the **Counted Total** from the counting sheet.
+2. Add one line per envelope, check or cash gift: donor, fund, check or cash, check number, amount. Leave the donor empty for loose cash; it is recorded as "Anonymous (loose offering)", which gets no statement.
+3. **Difference** stays red until the lines add up to the counted total. **Post Batch** is refused until they match.
+4. Posting makes one confirmed donation per line (with a receipt number, on the donor's history and year-end statement; no thank-you email) and **one** journal entry: a single debit for the whole deposit, so the bank feed's deposit line matches it in one step, and one credit per gift to its fund's income account.
+5. To correct a posted batch, **Cancel Batch** (cancels its gifts and entry), **Back to Draft**, fix it and post again. A single gift from a posted batch can't be cancelled on its own.
+
 ## Year-End Giving Statements
 
 Donations > Donations > Year-End Statements.

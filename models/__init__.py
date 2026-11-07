@@ -9,3 +9,5 @@ from . import res_partner
 from . import donation_tax_receipt
 from . import res_company
 from . import tax_receipt_annual_create
+from . import donation_batch
+from . import donation_pledge
