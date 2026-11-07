@@ -13,6 +13,7 @@
         * Automatic recurring donation processing
         * Payment token support for saved cards
         * Offering batches: enter a Sunday's envelopes, checks and cash on one screen
+        * Stewardship pledges (switch on in Settings): progress per family, shown on My Account
         * Year-end giving statements (OCA donation_base annual receipts)
     """,
     'author': 'Jacob Neubaum',
@@ -28,6 +29,7 @@
     ],
     'data': [
         'security/donation_security.xml',
+        'security/donation_pledge_security.xml',
         'security/ir.model.access.csv',
         'data/donation_data.xml',
         'data/donation_cron.xml',
@@ -44,6 +46,7 @@
         'data/donation_batch_data.xml',
         'data/donation_batch_partner.xml',
         'views/donation_batch_views.xml',
+        'views/donation_pledge_views.xml',
     ],
     'assets': {
         'web.assets_frontend': [

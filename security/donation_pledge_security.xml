@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Switched on for everyone by Settings > Donations > Stewardship Pledges. -->
+    <record id="group_donation_pledges" model="res.groups">
+        <field name="name">Use stewardship pledges</field>
+        <field name="category_id" ref="base.module_category_hidden"/>
+    </record>
+
+    <record id="donation_pledge_company_rule" model="ir.rule">
+        <field name="name">Pledges: own companies</field>
+        <field name="model_id" ref="model_donation_pledge"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+</odoo>

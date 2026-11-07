@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_donation_pledge_list" model="ir.ui.view">
+        <field name="name">donation.pledge.list</field>
+        <field name="model">donation.pledge</field>
+        <field name="arch" type="xml">
+            <list string="Stewardship Pledges">
+                <field name="campaign_id" optional="hide"/>
+                <field name="partner_id"/>
+                <field name="category_id" optional="hide"/>
+                <field name="frequency"/>
+                <field name="amount" sum="Total"/>
+                <field name="given"/>
+                <field name="expected"/>
+                <field name="remaining"/>
+                <field name="progress" widget="progressbar"/>
+                <field name="status" widget="badge"
+                       decoration-success="status in ('on_track', 'done')"
+                       decoration-danger="status == 'behind'"
+                       decoration-info="status in ('later', 'upcoming')"/>
+                <field name="currency_id" column_invisible="1"/>
+                <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_donation_pledge_form" model="ir.ui.view">
+        <field name="name">donation.pledge.form</field>
+        <field name="model">donation.pledge</field>
+        <field name="arch" type="xml">
+            <form string="Stewardship Pledge">
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_gifts" type="object" class="oe_stat_button" icon="fa-heart">
+                            <div class="o_stat_info">
+                                <span class="o_stat_text">Gifts</span>
+                            </div>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <label for="partner_id"/>
+                        <h1><field name="partner_id" placeholder="Family or donor"/></h1>
+                    </div>
+                    <group>
+                        <group string="Pledge">
+                            <field name="campaign_id"/>
+                            <field name="amount"/>
+                            <field name="frequency"/>
+                            <field name="category_id" placeholder="All funds"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="currency_id" invisible="1"/>
+                        </group>
+                        <group string="Progress">
+                            <field name="date_start"/>
+                            <field name="date_end"/>
+                            <field name="given"/>
+                            <field name="expected"/>
+                            <field name="remaining"/>
+                            <field name="progress" widget="progressbar"/>
+                            <field name="status" widget="badge"
+                                   decoration-success="status in ('on_track', 'done')"
+                                   decoration-danger="status == 'behind'"
+                                   decoration-info="status in ('later', 'upcoming')"/>
+                        </group>
+                    </group>
+                    <field name="note" placeholder="Notes from the pledge card"/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_donation_pledge_search" model="ir.ui.view">
+        <field name="name">donation.pledge.search</field>
+        <field name="model">donation.pledge</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="partner_id"/>
+                <field name="campaign_id"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_campaign" string="Campaign" context="{'group_by': 'campaign_id'}"/>
+                    <filter name="group_frequency" string="Plans to Give" context="{'group_by': 'frequency'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_donation_pledge" model="ir.actions.act_window">
+        <field name="name">Stewardship Pledges</field>
+        <field name="res_model">donation.pledge</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Record this year's stewardship pledges</p>
+            <p>Enter each family's pledge card: how much they plan to give this year and how often.
+               Their gifts count toward it by themselves, however they give.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_donation_pledges" name="Stewardship Pledges" parent="menu_donation_donations"
+              action="action_donation_pledge" sequence="17" groups="group_donation_pledges"/>
+
+    <record id="view_campaign_form_pledges" model="ir.ui.view">
+        <field name="name">donation.campaign.form.pledges</field>
+        <field name="model">donation.campaign</field>
+        <field name="inherit_id" ref="view_campaign_form"/>
+        <field name="arch" type="xml">
+            <div name="button_box" position="inside">
+                <button name="action_view_pledges" type="object" class="oe_stat_button" icon="fa-handshake-o"
+                        groups="donation_management.group_donation_pledges">
+                    <field name="pledge_count" widget="statinfo" string="Pledges"/>
+                </button>
+            </div>
+            <field name="progress_percentage" position="after">
+                <field name="pledged_total" groups="donation_management.group_donation_pledges"
+                       invisible="not pledge_count"/>
+                <field name="pledge_given_total" groups="donation_management.group_donation_pledges"
+                       invisible="not pledge_count"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="res_config_settings_view_form_donation" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.donation</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="Donations" string="Donations" name="donation_management"
+                     groups="donation_management.group_donation_manager">
+                    <block title="Giving" name="donation_giving">
+                        <setting id="donation_pledges" string="Stewardship Pledges"
+                                 help="Families pledge a yearly amount. The office sees who is on track, and each family sees its own progress on My Account.">
+                            <field name="group_donation_pledges"/>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- My Account > Donations: the donor's own pledge for a campaign running now. -->
+    <template id="portal_my_donations_pledge" name="My Donations: stewardship pledge"
+              inherit_id="donation_management.portal_my_donations">
+        <xpath expr="//t[@t-if='recurring_rules']" position="before">
+            <t t-foreach="request.env['donation.pledge']._portal_pledges(request.env.user.partner_id)" t-as="pledge">
+                <div class="card mb-4 o_portal_donation_pledge">
+                    <div class="card-header">
+                        <h4 class="mb-0"><i class="fa fa-handshake-o me-2"/>Your <t t-out="pledge.campaign_id.name"/> pledge</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center mb-3">
+                            <div class="col-4">
+                                <div class="text-muted small">Pledged</div>
+                                <div class="h4 mb-0" t-out="pledge.amount" t-options="{'widget': 'monetary', 'display_currency': pledge.currency_id}"/>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-muted small">Given so far</div>
+                                <div class="h4 mb-0 text-success" t-out="pledge.given" t-options="{'widget': 'monetary', 'display_currency': pledge.currency_id}"/>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-muted small">Still to give</div>
+                                <div class="h4 mb-0" t-out="pledge.remaining" t-options="{'widget': 'monetary', 'display_currency': pledge.currency_id}"/>
+                            </div>
+                        </div>
+                        <div class="progress mb-2" style="height: 14px;" role="progressbar"
+                             t-att-aria-valuenow="int(pledge.progress)" aria-valuemin="0" aria-valuemax="100">
+                            <div class="progress-bar bg-success" t-att-style="'width: ' + str(int(pledge.progress)) + '%'"/>
+                        </div>
+                        <p class="small text-muted mb-3">
+                            <t t-out="int(pledge.progress)"/>% of your pledge so far. Thank you!
+                        </p>
+                        <a t-if="pledge.remaining" href="/donate" class="btn btn-primary btn-sm">Give toward my pledge</a>
+                    </div>
+                </div>
+            </t>
+        </xpath>
+    </template>
+</odoo>
