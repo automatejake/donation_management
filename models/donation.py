@@ -115,6 +115,15 @@ class Donation(models.Model):
         ('cancelled', 'Cancelled'),
     ], string='Status', default='draft', required=True, tracking=True)
 
+    batch_id = fields.Many2one(
+        'donation.batch', string='Offering Batch', readonly=True, copy=False, index=True,
+        help='The Sunday batch this envelope gift was entered in.',
+    )
+    payment_kind = fields.Selection(
+        [('check', 'Check'), ('cash', 'Cash')], string='Paid By', readonly=True, copy=False,
+    )
+    check_number = fields.Char(string='Check #', readonly=True, copy=False)
+
     tax_receipt_number = fields.Char(string='Tax Receipt Number', readonly=True, copy=False)
     tax_receipt_id = fields.Many2one(
         'donation.tax.receipt',
@@ -224,6 +233,14 @@ class Donation(models.Model):
             self._send_confirmation_email()
 
     def action_cancel(self):
+        batched = self.filtered(lambda d: d.batch_id and d.batch_id.state == 'posted')
+        if batched:
+            raise UserError(_(
+                'Donation %(donation)s was entered in offering batch %(batch)s and shares its deposit entry. '
+                'Cancel the batch, correct it and post it again.',
+                donation=batched[0].name,
+                batch=batched[0].batch_id.display_name,
+            ))
         for donation in self:
             if donation.account_move_id and donation.account_move_id.state == 'posted':
                 donation.account_move_id.button_draft()

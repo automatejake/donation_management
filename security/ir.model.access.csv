@@ -17,3 +17,9 @@ access_donation_category_portal,donation.category.portal,model_donation_category
 access_donation_tax_receipt_manager,donation.tax.receipt.manager,donation_base.model_donation_tax_receipt,group_donation_manager,1,1,1,1
 access_donation_tax_receipt_user,donation.tax.receipt.user,donation_base.model_donation_tax_receipt,group_donation_user,1,0,0,0
 access_tax_receipt_annual_create_manager,tax.receipt.annual.create.manager,donation_base.model_tax_receipt_annual_create,group_donation_manager,1,1,1,1
+access_donation_batch_manager,donation.batch.manager,model_donation_batch,group_donation_manager,1,1,1,1
+access_donation_batch_user,donation.batch.user,model_donation_batch,group_donation_user,1,0,0,0
+access_donation_batch_line_manager,donation.batch.line.manager,model_donation_batch_line,group_donation_manager,1,1,1,1
+access_donation_batch_line_user,donation.batch.line.user,model_donation_batch_line,group_donation_user,1,0,0,0
+access_donation_pledge_manager,donation.pledge.manager,model_donation_pledge,group_donation_manager,1,1,1,1
+access_donation_pledge_user,donation.pledge.user,model_donation_pledge,group_donation_user,1,0,0,0

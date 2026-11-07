@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_donation_batch_list" model="ir.ui.view">
+        <field name="name">donation.batch.list</field>
+        <field name="model">donation.batch</field>
+        <field name="arch" type="xml">
+            <list string="Offering Batches" decoration-muted="state == 'cancelled'">
+                <field name="date"/>
+                <field name="name"/>
+                <field name="label"/>
+                <field name="journal_id" optional="show"/>
+                <field name="line_count" string="Gifts"/>
+                <field name="entered_total" sum="Total"/>
+                <field name="currency_id" column_invisible="1"/>
+                <field name="company_id" groups="base.group_multi_company" optional="show"/>
+                <field name="state" widget="badge" decoration-success="state == 'posted'" decoration-info="state == 'draft'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_donation_batch_form" model="ir.ui.view">
+        <field name="name">donation.batch.form</field>
+        <field name="model">donation.batch</field>
+        <field name="arch" type="xml">
+            <form string="Offering Batch">
+                <header>
+                    <button name="action_post" string="Post Batch" type="object" class="btn-primary"
+                            invisible="state != 'draft'"/>
+                    <button name="action_cancel" string="Cancel Batch" type="object"
+                            invisible="state != 'posted'"
+                            confirm="This cancels every gift in the batch and its deposit entry. Continue?"/>
+                    <button name="action_reset_to_draft" string="Back to Draft" type="object"
+                            invisible="state != 'cancelled'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,posted"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_donations" type="object" class="oe_stat_button" icon="fa-heart"
+                                invisible="not donation_count">
+                            <field name="donation_count" widget="statinfo" string="Donations"/>
+                        </button>
+                        <button name="action_view_move" type="object" class="oe_stat_button" icon="fa-bank"
+                                invisible="not move_id">
+                            <div class="o_stat_info">
+                                <span class="o_stat_text">Deposit Entry</span>
+                            </div>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                        <field name="label" placeholder="e.g. Sunday offering" readonly="state != 'draft'"/>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="date" readonly="state != 'draft'"/>
+                            <field name="journal_id" readonly="state != 'draft'"/>
+                            <field name="default_category_id" readonly="state != 'draft'"/>
+                            <field name="company_id" groups="base.group_multi_company" readonly="state != 'draft'"/>
+                            <field name="move_id" invisible="1"/>
+                        </group>
+                        <group>
+                            <field name="counted_total" readonly="state != 'draft'"/>
+                            <field name="entered_total"/>
+                            <field name="difference" invisible="not counted_total"
+                                   decoration-danger="difference != 0" decoration-success="difference == 0"/>
+                            <field name="currency_id" invisible="1"/>
+                        </group>
+                    </group>
+                    <field name="line_ids" readonly="state != 'draft'"
+                           context="{'batch_default_category_id': default_category_id}">
+                        <list editable="bottom">
+                            <field name="sequence" widget="handle"/>
+                            <field name="sequence_number"/>
+                            <field name="partner_id" placeholder="Anonymous"
+                                   context="{'res_partner_search_mode': 'customer'}"/>
+                            <field name="category_id"/>
+                            <field name="campaign_id" optional="hide"/>
+                            <field name="payment_kind"/>
+                            <field name="check_number" readonly="payment_kind == 'cash'"/>
+                            <field name="amount" sum="Total"/>
+                            <field name="memo" optional="show"/>
+                            <field name="currency_id" column_invisible="1"/>
+                        </list>
+                    </field>
+                    <group class="oe_subtotal_footer" name="totals">
+                        <field name="check_total"/>
+                        <field name="cash_total"/>
+                        <field name="entered_total" class="oe_subtotal_footer_separator"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_donation_batch_search" model="ir.ui.view">
+        <field name="name">donation.batch.search</field>
+        <field name="model">donation.batch</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="label"/>
+                <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
+                <filter name="posted" string="Posted" domain="[('state', '=', 'posted')]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_month" string="Month" context="{'group_by': 'date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_donation_batch" model="ir.actions.act_window">
+        <field name="name">Offering Batches</field>
+        <field name="res_model">donation.batch</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Enter this Sunday's offering</p>
+            <p>Type each envelope, check and cash gift on one screen. When the lines match the counted total,
+               post the batch: every donor's history and year-end statement gets their gift, and the books get
+               one deposit that matches the bank.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_donation_batch" name="Offering Batches" parent="menu_donation_donations"
+              action="action_donation_batch" sequence="15"/>
+
+    <!-- Show the batch and check number on a donation that came from one. -->
+    <record id="view_donation_form_batch" model="ir.ui.view">
+        <field name="name">donation.donation.form.batch</field>
+        <field name="model">donation.donation</field>
+        <field name="inherit_id" ref="view_donation_form"/>
+        <field name="arch" type="xml">
+            <field name="date" position="after">
+                <field name="batch_id" invisible="not batch_id"/>
+                <field name="payment_kind" invisible="not batch_id"/>
+                <field name="check_number" invisible="not check_number"/>
+            </field>
+        </field>
+    </record>
+</odoo>

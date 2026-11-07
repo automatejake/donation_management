@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Loose cash with no name. No statement is made for it. -->
+    <record id="partner_anonymous_donor" model="res.partner">
+        <field name="name">Anonymous (loose offering)</field>
+        <field name="tax_receipt_option">none</field>
+        <field name="company_id" eval="False"/>
+    </record>
+</odoo>
