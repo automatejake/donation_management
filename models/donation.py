@@ -273,15 +273,34 @@ class Donation(models.Model):
         ], limit=1)
 
     def _get_outstanding_receipts_account(self, journal):
+        """Account the gift is received on before the bank statement matches it.
+
+        Uses, in order: the journal's payment method line for the provider
+        that took the payment, the journal's first line that has an account,
+        then the company's Outstanding Receipts account. A new Odoo 18
+        database leaves the "Manual Payment" line without an account, so the
+        company account is what most check and cash gifts use.
+        """
         self.ensure_one()
-        method_line = journal.inbound_payment_method_line_ids[:1]
-        if not method_line or not method_line.payment_account_id:
+        lines = journal.inbound_payment_method_line_ids.filtered('payment_account_id')
+        provider = self.payment_transaction_id.provider_id
+        line = provider and lines.filtered(lambda l: l.payment_provider_id == provider)[:1]
+        account = (line or lines[:1]).payment_account_id
+        if not account:
+            company = journal.company_id or self.company_id or self.env.company
+            account = (
+                self.env['account.chart.template']
+                .with_context(allowed_company_ids=company.root_id.ids)
+                .ref('account_journal_payment_debit_account_id', raise_if_not_found=False)
+                or company.transfer_account_id
+            )
+        if not account:
             raise UserError(_(
-                'Journal "%(journal)s" has no inbound payment method with an outstanding receipts account. '
-                'Configure it under Accounting → Configuration → Journals.',
+                'Journal "%(journal)s" has no outstanding receipts account. '
+                'Set one under Accounting → Configuration → Journals → Incoming Payments.',
                 journal=journal.display_name,
             ))
-        return method_line.payment_account_id
+        return account
 
     def _create_donation_account_move(self):
         """Post debit outstanding receipts / credit revenue (no invoice, no AR)."""

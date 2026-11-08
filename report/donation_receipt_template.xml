@@ -24,7 +24,7 @@
                     <tr>
                         <td style="padding: 40px 30px;">
                             <p style="font-size: 16px; line-height: 24px; margin: 0 0 20px;">
-                                Dear <strong>{{ object.partner_id.name }}</strong>,
+                                Dear <strong><t t-out="object.partner_id.name"/></strong>,
                             </p>
                             
                             <p style="font-size: 16px; line-height: 24px; margin: 0 0 20px;">
@@ -39,32 +39,32 @@
                                         <table border="0" cellpadding="5" cellspacing="0" width="100%">
                                             <tr>
                                                 <td style="color: #666666; width: 40%;">Reference:</td>
-                                                <td><strong>{{ object.name }}</strong></td>
+                                                <td><strong><t t-out="object.name"/></strong></td>
                                             </tr>
                                             <tr>
                                                 <td style="color: #666666;">Date:</td>
-                                                <td><strong>{{ format_datetime(object.date, dt_format='medium') }}</strong></td>
+                                                <td><strong><t t-out="format_datetime(object.date, dt_format='medium')"/></strong></td>
                                             </tr>
                                             <tr>
                                                 <td style="color: #666666;">Amount:</td>
-                                                <td><strong style="color: #28a745; font-size: 18px;">{{ format_amount(object.amount, object.currency_id) }}</strong></td>
+                                                <td><strong style="color: #28a745; font-size: 18px;"><t t-out="format_amount(object.amount, object.currency_id)"/></strong></td>
                                             </tr>
                                             <t t-if="object.campaign_id">
                                                 <tr>
                                                     <td style="color: #666666;">Campaign:</td>
-                                                    <td><strong>{{ object.campaign_id.name }}</strong></td>
+                                                    <td><strong><t t-out="object.campaign_id.name"/></strong></td>
                                                 </tr>
                                             </t>
                                             <t t-if="object.is_recurring">
                                                 <tr>
                                                     <td style="color: #666666;">Type:</td>
-                                                    <td><strong>Recurring ({{ 'Bi-weekly' if object.frequency == 'biweekly' else object.frequency.replace('_', ' ').title() }})</strong></td>
+                                                    <td><strong>Recurring (<t t-out="'Bi-weekly' if object.frequency == 'biweekly' else object.frequency.replace('_', ' ').title()"/>)</strong></td>
                                                 </tr>
                                             </t>
                                             <t t-if="object.tax_receipt_number">
                                                 <tr>
                                                     <td style="color: #666666;">Tax Receipt:</td>
-                                                    <td><strong>{{ object.tax_receipt_number }}</strong></td>
+                                                    <td><strong><t t-out="object.tax_receipt_number"/></strong></td>
                                                 </tr>
                                             </t>
                                         </table>
@@ -74,7 +74,7 @@
                             
                             <t t-if="object.is_recurring">
                                 <p style="font-size: 14px; line-height: 22px; margin: 20px 0; padding: 15px; background-color: #e7f3ff; border-left: 4px solid #0066cc; border-radius: 4px;">
-                                    <strong>Recurring Donation:</strong> Your {{ 'bi-weekly' if object.frequency == 'biweekly' else object.frequency }} donation of {{ format_amount(object.base_amount or object.amount, object.currency_id) }} 
+                                    <strong>Recurring Donation:</strong> Your <t t-out="'bi-weekly' if object.frequency == 'biweekly' else object.frequency"/> donation of <t t-out="format_amount(object.base_amount or object.amount, object.currency_id)"/> 
                                     will be automatically processed using your saved payment method. You can manage your recurring donations anytime from your account portal.
                                 </p>
                             </t>
@@ -85,7 +85,7 @@
                             
                             <!-- CTA Button -->
                             <div style="text-align: center; margin: 30px 0;">
-                                <a href="{{ ctx.get('base_url') }}/my/donations/{{ object.id }}" 
+                                <a t-if="object.partner_id.user_ids" t-attf-href="{{ object.get_base_url() }}/my/donations/{{ object.id }}" 
                                    style="display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
                                     View Donation Details
                                 </a>
@@ -93,7 +93,7 @@
                             
                             <p style="font-size: 14px; line-height: 22px; color: #666666; margin: 30px 0 0; padding-top: 20px; border-top: 1px solid #e0e0e0;">
                                 With gratitude,<br/>
-                                <strong>{{ object.company_id.name or user.company_id.name }}</strong>
+                                <strong><t t-out="object.company_id.name or user.company_id.name"/></strong>
                             </p>
                         </td>
                     </tr>
@@ -136,11 +136,11 @@
                     <tr>
                         <td style="padding: 40px 30px;">
                             <p style="font-size: 16px; line-height: 24px; margin: 0 0 20px;">
-                                Dear <strong>{{ object.partner_id.name }}</strong>,
+                                Dear <strong><t t-out="object.partner_id.name"/></strong>,
                             </p>
                             
                             <p style="font-size: 16px; line-height: 24px; margin: 0 0 20px;">
-                                We attempted to process your recurring donation of <strong>{{ format_amount(object.amount, object.currency_id) }}</strong>, 
+                                We attempted to process your recurring donation of <strong><t t-out="format_amount(object.amount, object.currency_id)"/></strong>, 
                                 but the payment could not be completed.
                             </p>
                             
@@ -159,7 +159,7 @@
                             </p>
                             
                             <div style="text-align: center; margin: 30px 0;">
-                                <a href="{{ ctx.get('base_url') }}/my/donations" 
+                                <a t-attf-href="{{ object.get_base_url() }}/my/donations" 
                                    style="display: inline-block; padding: 14px 28px; background-color: #28a745; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
                                     Update Payment Method
                                 </a>
@@ -188,13 +188,13 @@
         <field name="email_to">{{ object.partner_id.email }}</field>
         <field name="body_html" type="html">
 <div style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #333;">
-    <p>Dear <strong>{{ object.partner_id.name }}</strong>,</p>
+    <p>Dear <strong><t t-out="object.partner_id.name"/></strong>,</p>
     <p>Thank you for setting up a recurring donation. Your payment method has been saved successfully.</p>
     <p>
-        <strong>Amount:</strong> {{ format_amount(object.base_amount or object.amount, object.currency_id) }}<br/>
-        <strong>Schedule:</strong> {{ 'Bi-weekly' if object.frequency == 'biweekly' else object.frequency.replace('_', ' ').title() }}<br/>
-        <strong>First charge:</strong> {{ format_date(object.recurring_start_date) }}<br/>
-        <strong>Reference:</strong> {{ object.name }}
+        <strong>Amount:</strong> <t t-out="format_amount(object.base_amount or object.amount, object.currency_id)"/><br/>
+        <strong>Schedule:</strong> <t t-out="'Bi-weekly' if object.frequency == 'biweekly' else object.frequency.replace('_', ' ').title()"/><br/>
+        <strong>First charge:</strong> <t t-out="format_date(object.recurring_start_date)"/><br/>
+        <strong>Reference:</strong> <t t-out="object.name"/>
     </p>
     <p>Your first donation will be processed on the first charge date. Each following donation will be charged according to your selected schedule.</p>
     <p>Thank you for your generous support.</p>

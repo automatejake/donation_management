@@ -11,7 +11,7 @@ from markupsafe import Markup
 from werkzeug.urls import url_encode, url_quote
 
 from odoo import http, fields, _
-from odoo.http import request
+from odoo.http import content_disposition, request
 from odoo.addons.payment import utils as payment_utils
 from odoo.addons.payment.controllers.portal import PaymentPortal
 from odoo.addons.payment.controllers.post_processing import PaymentPostProcessing
@@ -566,15 +566,6 @@ class DonationWebsiteController(http.Controller):
         """Build payment payload for Helcim direct API from the donation form."""
         partner = donation.partner_id
         save = post.get('helcim_save_payment_method') == 'on' or donation.is_recurring
-        if payment_method.code == 'card':
-            return {
-                'type': 'card',
-                'card_number': post.get('helcim_card_number', ''),
-                'card_expiry': post.get('helcim_card_expiry', ''),
-                'card_cvv': post.get('helcim_card_cvv', ''),
-                'card_holder_name': post.get('helcim_card_holder_name') or partner.name,
-                'save_payment_method': save,
-            }
         if payment_method.code == 'ach_direct_debit':
             return {
                 'type': 'ach',
@@ -655,7 +646,6 @@ class DonationWebsiteController(http.Controller):
         return request.env['res.partner'].sudo().create({
             'name': post.get('name', 'Donor'),
             'email': email,
-            'phone': post.get('phone', ''),
         })
 
     def _redirect_to_confirmation(self, donation):
@@ -1024,7 +1014,10 @@ class DonationPortal(CustomerPortal):
             )
             if not report:
                 return request.redirect('/my/donations')
-            pdf_content, _report_format = report.sudo()._render_qweb_pdf(
+            # Donors can't read report records themselves; the gifts were already
+            # limited to their own above.
+            report = report.sudo()
+            pdf_content, _report_format = report._render_qweb_pdf(
                 report.report_name,
                 donations.ids,
                 data={'report_period_label': history['period_label']},
@@ -1032,6 +1025,7 @@ class DonationPortal(CustomerPortal):
             pdf_headers = [
                 ('Content-Type', 'application/pdf'),
                 ('Content-Length', len(pdf_content)),
+                ('Content-Disposition', content_disposition(filename_base + '.pdf')),
             ]
             return request.make_response(pdf_content, headers=pdf_headers)
 
@@ -1057,6 +1051,7 @@ class DonationPortal(CustomerPortal):
         csv_content = output.getvalue().encode('utf-8-sig')
         csv_headers = [
             ('Content-Type', 'text/csv; charset=utf-8'),
+            ('Content-Disposition', content_disposition(filename_base + '.csv')),
         ]
         return request.make_response(csv_content, headers=csv_headers)
 

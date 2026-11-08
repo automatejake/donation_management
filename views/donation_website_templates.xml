@@ -143,10 +143,6 @@
                                                     <label for="email" class="form-label">Email *</label>
                                                     <input type="email" name="email" id="email" class="form-control" required="required"/>
                                                 </div>
-                                                <div class="mb-3">
-                                                    <label for="phone" class="form-label">Phone (Optional)</label>
-                                                    <input type="tel" name="phone" id="phone" class="form-control"/>
-                                                </div>
                                             </t>
                                             <t t-else="">
                                                 <div class="alert alert-info">
@@ -367,34 +363,6 @@
                                                         Card details are sent securely from your browser to Helcim (not through this server).
                                                     </p>
                                                 </div>
-                                                <div id="o_donation_helcim_card_api" class="d-none">
-                                                    <div class="row g-3">
-                                                        <div class="col-12">
-                                                            <label class="form-label" for="helcim_card_holder_name">Name on card *</label>
-                                                            <input type="text" name="helcim_card_holder_name" id="helcim_card_holder_name"
-                                                                   class="form-control" autocomplete="cc-name"
-                                                                   t-att-value="user.partner_id.name if not user._is_public() else None"/>
-                                                        </div>
-                                                        <div class="col-12">
-                                                            <label class="form-label" for="helcim_card_number">Card number *</label>
-                                                            <input type="text" name="helcim_card_number" id="helcim_card_number"
-                                                                   class="form-control" inputmode="numeric" autocomplete="cc-number"
-                                                                   placeholder="4111 1111 1111 1111"/>
-                                                        </div>
-                                                        <div class="col-6">
-                                                            <label class="form-label" for="helcim_card_expiry">Expiry (MM/YY) *</label>
-                                                            <input type="text" name="helcim_card_expiry" id="helcim_card_expiry"
-                                                                   class="form-control" inputmode="numeric" autocomplete="cc-exp"
-                                                                   placeholder="MM/YY" maxlength="7"/>
-                                                        </div>
-                                                        <div class="col-6">
-                                                            <label class="form-label" for="helcim_card_cvv">Security code *</label>
-                                                            <input type="text" name="helcim_card_cvv" id="helcim_card_cvv"
-                                                                   class="form-control" inputmode="numeric" autocomplete="cc-csc"
-                                                                   maxlength="4"/>
-                                                        </div>
-                                                    </div>
-                                                </div>
                                                 <div id="o_donation_helcim_ach" class="d-none">
                                                     <div class="row g-3">
                                                         <div class="col-12">
@@ -403,14 +371,7 @@
                                                                    class="form-control"
                                                                    t-att-value="user.partner_id.name if not user._is_public() else None"/>
                                                         </div>
-                                                        <div class="col-md-6">
-                                                            <label class="form-label" for="helcim_bank_holder_type">Account holder type *</label>
-                                                            <select name="helcim_bank_holder_type" id="helcim_bank_holder_type" class="form-select">
-                                                                <option value="1">Personal</option>
-                                                                <option value="2">Business</option>
-                                                            </select>
-                                                        </div>
-                                                        <div class="col-md-6">
+                                                        <div class="col-12">
                                                             <label class="form-label" for="helcim_bank_account_type">Account type *</label>
                                                             <select name="helcim_bank_account_type" id="helcim_bank_account_type" class="form-select">
                                                                 <option value="1">Checking</option>

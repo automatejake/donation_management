@@ -62,24 +62,24 @@
                         </group>
                         <group name="donation_info" string="Donation">
                             <field name="amount"/>
-                            <field name="base_amount" readonly="1"/>
-                            <field name="cover_fees" readonly="1"/>
-                            <field name="fee_amount" readonly="1"/>
+                            <field name="base_amount" readonly="1" invisible="not cover_fees"/>
+                            <field name="cover_fees" readonly="1" invisible="not cover_fees"/>
+                            <field name="fee_amount" readonly="1" invisible="not cover_fees"/>
                             <field name="currency_id" invisible="1"/>
                             <field name="campaign_id"/>
                             <field name="category_id"/>
-                            <field name="tax_receipt_number" readonly="1"/>
+                            <field name="tax_receipt_number" readonly="1" invisible="not tax_receipt_number"/>
                             <field name="tax_receipt_id" invisible="not tax_receipt_id"/>
                         </group>
                     </group>
-                    <group name="schedule_info" string="Schedule">
+                    <group name="schedule_info" string="Schedule" invisible="frequency == 'one_time'">
                         <group>
-                            <field name="frequency"/>
-                            <field name="recurring_start_date" invisible="frequency == 'one_time'"/>
+                            <field name="frequency" readonly="1"/>
+                            <field name="recurring_start_date" readonly="1"/>
                         </group>
                         <group>
                             <field name="recurring_rule_id" readonly="1"/>
-                            <field name="next_donation_date"/>
+                            <field name="next_donation_date" invisible="not recurring_rule_id"/>
                         </group>
                     </group>
                     <group name="payment_info" string="Accounting">
@@ -87,11 +87,11 @@
                             <field name="journal_id"
                                    readonly="payment_transaction_id"
                                    required="not payment_transaction_id"/>
-                            <field name="account_move_id" readonly="1"/>
+                            <field name="account_move_id" readonly="1" invisible="not account_move_id"/>
                         </group>
-                        <group>
+                        <group invisible="not payment_transaction_id">
                             <field name="payment_transaction_id" readonly="1"/>
-                            <field name="payment_token_id" readonly="1"/>
+                            <field name="payment_token_id" readonly="1" invisible="not payment_token_id"/>
                         </group>
                     </group>
                     <group name="purpose_group" string="Purpose / message">
@@ -220,18 +220,6 @@
                     <group>
                         <field name="purpose" placeholder="Optional purpose or message..."/>
                     </group>
-                    <notebook>
-                        <page string="Generated Donations" name="donations">
-                            <field name="donation_ids" readonly="1">
-                                <list>
-                                    <field name="name"/>
-                                    <field name="date"/>
-                                    <field name="amount"/>
-                                    <field name="state"/>
-                                </list>
-                            </field>
-                        </page>
-                    </notebook>
                 </sheet>
                 <chatter/>
             </form>
