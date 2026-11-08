@@ -13,7 +13,7 @@ journals), so they test giving rather than that setting.
 from datetime import timedelta
 from unittest.mock import patch
 
-from odoo import fields, http
+from odoo import Command, fields, http
 from odoo.tests.common import HttpCase, TransactionCase, new_test_user, tagged
 
 
@@ -24,13 +24,19 @@ class GivingCommon:
         env = cls.env
         cls.company = env.company
         cls.currency = cls.company.currency_id
-        cls.provider = env['payment.provider'].search(
-            [('code', '=', 'helcim'), ('company_id', '=', cls.company.id)], limit=1,
-        ) or env['payment.provider'].search([('company_id', '=', cls.company.id)], limit=1)
-        cls.provider.write({'state': 'test', 'helcim_api_token': 'audit-test-token'})
         cls.method = env['payment.method'].with_context(active_test=False).search(
             [('code', '=', 'card')], limit=1,
         )
+        # Giving works with any provider; a bare test provider keeps these
+        # tests free of any one provider's checkout.
+        cls.provider = env['payment.provider'].create({
+            'name': 'Giving test provider',
+            'code': 'none',
+            'state': 'test',
+            'company_id': cls.company.id,
+            'payment_method_ids': [Command.set(cls.method.ids)],
+            'allow_tokenization': True,
+        })
         cls.income = env['account.account'].search([
             ('account_type', '=', 'income'),
             ('company_ids', 'in', cls.company.id),

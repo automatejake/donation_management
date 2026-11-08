@@ -537,7 +537,7 @@ class DonationRecurringRule(models.Model):
                         subject="Recurring Donation Error",
                     )
             # One gift's charge and its next date are saved together, before the
-            # next gift: a crash later in the run cannot undo a charge Helcim made.
+            # next gift: a crash later in the run cannot undo a charge the provider made.
             if auto_commit:
                 self.env.cr.commit()
 
@@ -576,6 +576,14 @@ class DonationRecurringRule(models.Model):
         db_uuid = self.env['ir.config_parameter'].sudo().get_param('database.uuid', '')
         return '%s/donation.recurring.rule/%s/%s' % (db_uuid, self.id, self.next_donation_date)
 
+    def _charge_context(self):
+        """Context for the scheduled charge.
+
+        ``payment_idempotency_key`` is the same for every attempt at the same
+        charge; providers that support it (Helcim does) then charge only once.
+        """
+        return {'payment_idempotency_key': self._charge_idempotency_key()}
+
     def _create_recurring_donation(self):
         self.ensure_one()
         if self.state != 'active' or self.charging_donation_id:
@@ -609,7 +617,7 @@ class DonationRecurringRule(models.Model):
             self.env.cr.commit()
 
         charged = donation.with_context(
-            helcim_idempotency_key=self._charge_idempotency_key(),
+            **self._charge_context()
         )._process_token_payment()
         values = {'charging_donation_id': False}
         if charged:

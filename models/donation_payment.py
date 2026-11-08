@@ -69,6 +69,16 @@ class DonationPayment(models.Model):
 class PaymentTransaction(models.Model):
     _inherit = 'payment.transaction'
 
+    def _donation_after_payment_done(self, donation):
+        """Hook for payment providers once a donation's payment is recorded.
+
+        A provider app (Helcim links the gift to its deposit batch) adds its
+        own implementation without depending on this app, so whichever is
+        loaded first still calls the other.
+        """
+        parent = getattr(super(), '_donation_after_payment_done', None)
+        return parent(donation) if parent else True
+
     def _post_process(self):
         """Donation payments: post receipts/revenue entry only (no invoice, no AR payment)."""
         # sudo: /payment/status/poll runs as public; guests cannot read donation.donation
@@ -96,8 +106,7 @@ class PaymentTransaction(models.Model):
             if tx.state == 'done':
                 if donation.state not in ('confirmed', 'cancelled'):
                     donation._finalize_after_payment(tx)
-                if tx.provider_code == 'helcim' and tx.helcim_card_batch_id:
-                    tx._helcim_link_batch_from_donation_move(donation)
+                tx._donation_after_payment_done(donation)
             elif tx.state == 'cancel':
                 donation.action_cancel()
             elif tx.state == 'error' and donation.state == 'pending':

@@ -46,19 +46,3 @@ class TestDonationRoutes(TransactionCase):
         })
         with self._request(owner):
             self.assertEqual(self.controller._own_payment_token(self.token.id), self.token)
-
-    def test_helcim_js_complete_needs_the_checkout_token(self):
-        donation = self.env['donation.donation'].with_context(from_website=True).create({
-            'partner_id': self.victim.id,
-            'amount': 10.0,
-            'currency_id': self.env.company.currency_id.id,
-            'state': 'pending',
-        })
-        donation._portal_ensure_token()
-        complete = type(self.controller).donation_helcim_js_complete.__wrapped__
-        with self._request(self.env.ref('base.public_user')):
-            for token in ('', 'wrong'):
-                url = complete(self.controller, donation_id=donation.id, access_token=token)
-                self.assertIn('error=invalid_payment', url)
-        self.assertTrue(donation.exists())
-        self.assertEqual(donation.state, 'pending')

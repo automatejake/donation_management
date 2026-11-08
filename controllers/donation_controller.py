@@ -1,22 +1,20 @@
 # -*- coding: utf-8 -*-
 import csv
-import hmac
 import io
+import json
 import logging
 import re
 from calendar import monthrange
 from datetime import datetime
 
-from markupsafe import Markup
-from werkzeug.urls import url_encode, url_quote
+from werkzeug.urls import url_encode
 
 from odoo import http, fields, _
 from odoo.http import content_disposition, request
 from odoo.addons.payment import utils as payment_utils
 from odoo.addons.payment.controllers.portal import PaymentPortal
-from odoo.addons.payment.controllers.post_processing import PaymentPostProcessing
 from odoo.addons.portal.controllers.portal import CustomerPortal, pager as portal_pager
-from odoo.exceptions import AccessError, MissingError, ValidationError
+from odoo.exceptions import AccessError, MissingError, UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -28,13 +26,6 @@ class DonationWebsiteController(http.Controller):
     def _payment_portal(self):
         """Payment portal helpers (_create_transaction needs a controller instance)."""
         return PaymentPortal()
-
-    def _payment_method_for_provider(self, provider):
-        provider_sudo = provider.sudo()
-        pms = provider_sudo.with_context(active_test=False).payment_method_ids.filtered('active')
-        if not pms:
-            pms = provider_sudo.with_context(active_test=False).payment_method_ids[:1]
-        return pms[:1]
 
     def _get_default_fee_coverage_percent(self):
         return float(request.env['ir.config_parameter'].sudo().get_param(
@@ -49,57 +40,6 @@ class DonationWebsiteController(http.Controller):
             currency_id=request.env.company.currency_id.id,
             amount=amount,
         )
-
-    def _get_donation_payment_options(self, partner, amount=None):
-        """Payment methods to show on the donate form (Card, ACH, etc.), each with its provider."""
-        amount = amount if amount is not None else 100.0
-        partner = partner or request.env.user.partner_id
-        providers = self._get_compatible_providers(partner, amount)
-        payment_methods = request.env['payment.method'].sudo()._get_compatible_payment_methods(
-            providers.ids,
-            partner.id,
-            currency_id=request.env.company.currency_id.id,
-            amount=amount,
-        )
-        options = []
-        for pm in payment_methods:
-            provider = (pm.provider_ids & providers)[:1]
-            if provider:
-                options.append({'payment_method': pm, 'provider': provider})
-        return options
-
-    def _resolve_payment_selection(self, post, partner=None, amount=None):
-        """Return (provider, payment_method) from form data, or (None, None)."""
-        method_type, method_id = self._parse_payment_method(post)
-        if not method_type:
-            return None, None
-        if method_type == 'token':
-            token = self._own_payment_token(method_id)
-            if not token:
-                return None, None
-            return token.provider_id, token.payment_method_id
-
-        partner = partner or request.env.user.partner_id
-        try:
-            amount = amount if amount is not None else float(post.get('amount') or 0)
-        except (TypeError, ValueError):
-            amount = 100.0
-        providers = self._get_compatible_providers(partner, amount or 100.0)
-
-        if method_type == 'method':
-            pm = request.env['payment.method'].sudo().browse(method_id)
-            provider = (pm.provider_ids & providers)[:1]
-            if not pm.exists() or not provider:
-                return None, None
-            return provider, pm
-
-        if method_type == 'provider':
-            provider = request.env['payment.provider'].sudo().browse(method_id)
-            if not provider.exists() or provider.id not in providers.ids:
-                return None, None
-            return provider, self._payment_method_for_provider(provider)
-
-        return None, None
 
     def _own_payment_token(self, token_id):
         """The saved payment method ``token_id`` if it belongs to the logged-in user, else empty.
@@ -198,34 +138,69 @@ class DonationWebsiteController(http.Controller):
         ])
         categories = request.env['donation.category'].sudo().search([('active', '=', True)])
 
-        partner = request.env.user.partner_id if not request.env.user._is_public() else None
-        providers = self._get_compatible_providers(partner)
-        payment_tokens = self._get_payment_tokens(partner, providers)
-        payment_options = self._get_donation_payment_options(partner)
-        default_fee_percent = self._get_default_fee_coverage_percent()
-        helcim_provider = self._get_compatible_providers(partner).filtered(
-            lambda p: p.code == 'helcim',
-        )[:1]
-
-        return request.render('donation_management.donation_form_page', {
+        values = {
             'campaigns': campaigns,
             'categories': categories,
-            'payment_options': payment_options,
-            'payment_tokens': payment_tokens,
             'user': request.env.user,
             'error': kwargs.get('error'),
             'success': kwargs.get('success'),
-            'default_fee_percent': default_fee_percent,
-            'helcim_checkout_mode': (
-                helcim_provider.helcim_checkout_mode if helcim_provider else False
-            ),
-            'helcim_js_config_token': (
-                helcim_provider.helcim_js_config_token if helcim_provider else False
-            ),
-            'helcim_provider_state': (
-                helcim_provider.state if helcim_provider else False
-            ),
+            'default_fee_percent': self._get_default_fee_coverage_percent(),
+        }
+        values.update(self._donation_payment_form_values())
+        return request.render('donation_management.donation_form_page', values)
+
+    def _donation_payment_form_values(self):
+        """Values for Odoo's standard payment form (payment.form) on /donate.
+
+        Every provider shows its own fields there, the same way as on an
+        invoice or in the shop, so giving works with any provider.
+        """
+        user = request.env.user
+        partner_sudo = user.partner_id.sudo()
+        currency = request.env.company.currency_id
+        providers_sudo = self._get_compatible_providers(partner_sudo)
+        payment_methods_sudo = request.env['payment.method'].sudo()._get_compatible_payment_methods(
+            providers_sudo.ids, partner_sudo.id, currency_id=currency.id,
+        )
+        tokens_sudo = self._get_payment_tokens(
+            None if user._is_public() else partner_sudo, providers_sudo,
+        )
+        if user._is_public():
+            # A guest's gift is filed under the email they type, which proves
+            # nothing: they get no "save my details" box (recurring gifts save
+            # the card anyway, to charge it on schedule).
+            show_tokenize = {provider.id: False for provider in providers_sudo}
+        else:
+            show_tokenize = PaymentPortal._compute_show_tokenize_input_mapping(providers_sudo)
+        fee_percents = {
+            'payment_method_%s' % pm.id: round(pm.get_donation_fee_coverage_percent(), 2)
+            for pm in payment_methods_sudo
+        }
+        fee_percents.update({
+            'token_%s' % token.id: round(
+                token.payment_method_id.get_donation_fee_coverage_percent(), 2,
+            )
+            for token in tokens_sudo
         })
+        return {
+            # payment.form context
+            'mode': 'payment',
+            'reference_prefix': 'DON',
+            'amount': 0.0,
+            'currency': currency,
+            'partner_id': partner_sudo.id,
+            'providers_sudo': providers_sudo,
+            'payment_methods_sudo': payment_methods_sudo,
+            'tokens_sudo': tokens_sudo,
+            'transaction_route': '/donate/transaction',
+            'landing_route': '/payment/confirmation',
+            'access_token': payment_utils.generate_access_token(partner_sudo.id, 0.0, currency.id),
+            'show_tokenize_input_mapping': show_tokenize,
+            'submit_button_label': _('Donate Now'),
+            'availability_report': {},
+            # /donate
+            'donation_fee_percents': json.dumps(fee_percents),
+        }
 
     @http.route('/donate/tokens', type='json', auth='public')
     def donation_tokens(self, email=None):
@@ -317,319 +292,125 @@ class DonationWebsiteController(http.Controller):
             'state': 'draft',
         })
 
-    def _create_donation_payment_transaction(self, donation, provider, payment_method=None):
-        """Create a payment transaction for a website donation.
+    # Error codes from _validate_donation_post, as the donor reads them.
+    def _donation_error_message(self, code):
+        messages = {
+            'invalid_amount': _('Please enter a valid donation amount.'),
+            'invalid_category': _('Please select a valid donation category.'),
+            'invalid_campaign': _('Please select a valid campaign.'),
+            'invalid_frequency': _('Please select a valid donation schedule.'),
+            'missing_start_date': _('Please choose a start date for your recurring donation.'),
+            'invalid_start_date': _('Please enter a valid start date.'),
+            'missing_name': _('Please enter your name.'),
+            'missing_email': _('Please enter your email.'),
+        }
+        return messages.get(code, _('Please check the donation details and try again.'))
 
-        :return: (tx, payment_method, operation)
+    @http.route('/donate/transaction', type='json', auth='public')
+    def donation_transaction(
+        self, donation_values=None, provider_id=None, payment_method_id=None,
+        token_id=None, flow=None, tokenization_requested=False, **kwargs,
+    ):
+        """Create the gift and its payment, for Odoo's payment form on /donate.
+
+        The amount comes from the gift (with fees when covered), never from
+        the browser's payment form.
         """
-        if not payment_method:
-            payment_method = self._payment_method_for_provider(provider)
-        if not payment_method:
-            raise ValidationError(_('No payment method configured for this provider.'))
-
-        recurring_starts_later = (
-            donation.is_recurring
-            and donation.recurring_start_date
-            and donation.recurring_start_date > fields.Date.today()
-        )
-
-        if recurring_starts_later:
-            validation_currency = provider.with_context(
-                validation_pm=payment_method,
-            )._get_validation_currency()
-            tx_currency = validation_currency[:1] or donation.currency_id
-            tx_amount = provider._get_validation_amount()
-            operation = 'validation'
-        else:
-            tx_currency = donation.currency_id
-            tx_amount = donation.amount
-            operation = provider._donation_payment_operation(is_validation=False)
-
-        access_token = payment_utils.generate_access_token(
-            donation.partner_id.id,
-            tx_amount,
-            tx_currency.id,
-        )
-
-        tx = request.env['payment.transaction'].sudo().create({
-            'provider_id': provider.id,
-            'payment_method_id': payment_method.id,
-            'reference': donation.name,
-            'amount': tx_amount,
-            'currency_id': tx_currency.id,
-            'partner_id': donation.partner_id.id,
-            'operation': operation,
-            'landing_route': '/payment/confirmation',
-            'tokenize': donation.is_recurring,
-        })
-        donation.sudo().write({
-            'payment_transaction_id': tx.id,
-            'state': 'pending',
-        })
-        PaymentPortal._update_landing_route(tx, access_token)
-        tx._log_sent_message()
-        PaymentPostProcessing.monitor_transaction(tx)
-        return tx, payment_method, operation
-
-    @http.route('/donate/submit', type='http', auth='public', website=True, methods=['POST'], csrf=True)
-    def donation_submit(self, **post):
+        post = dict(donation_values) if isinstance(donation_values, dict) else {}
+        if request.env.user._is_public():
+            if not (post.get('name') or '').strip():
+                raise ValidationError(self._donation_error_message('missing_name'))
+            if not (post.get('email') or '').strip():
+                raise ValidationError(self._donation_error_message('missing_email'))
+        if flow == 'token':
+            post['payment_method'] = 'token_%s' % (token_id or '')
+        elif payment_method_id:
+            post['payment_method'] = 'method_%s' % payment_method_id
         try:
             donation = self._create_donation_from_post(post)
         except ValueError as exc:
-            return request.redirect('/donate?error=%s' % exc.args[0])
-
-        method_type, method_id = self._parse_payment_method(post)
-        if not method_type:
-            donation.unlink()
-            return request.redirect('/donate?error=invalid_payment_method')
-
-        if method_type == 'token':
-            return self._pay_with_saved_token(donation, method_id)
-
-        provider, payment_method = self._resolve_payment_selection(
-            post, donation.partner_id, donation.amount,
-        )
-        if not provider or not payment_method:
-            donation.unlink()
-            return request.redirect('/donate?error=invalid_payment_method')
-
-        if provider.code == 'helcim':
-            if (
-                provider.helcim_checkout_mode == 'helcim_js'
-                and payment_method.code == 'card'
-            ):
-                donation.unlink()
-                return request.redirect('/donate?error=helcim_js_required')
-            if provider.helcim_checkout_mode == 'helcimpay_js':
-                return self._redirect_to_payment(donation, provider, payment_method, post)
-            return self._pay_with_helcim_api(donation, provider, payment_method, post)
-
-        return self._redirect_to_payment(donation, provider, payment_method, post)
-
-    @http.route('/donate/prepare_helcim_js', type='json', auth='public')
-    def donation_prepare_helcim_js(self, **post):
-        """Create donation + transaction; return data for Helcim.js checkout."""
-        try:
-            donation = self._create_donation_from_post(post)
-        except ValueError as exc:
-            return {'error': str(exc.args[0])}
-
-        provider, payment_method = self._resolve_payment_selection(
-            post, donation.partner_id, donation.amount,
-        )
-        if (
-            not provider
-            or not payment_method
-            or provider.code != 'helcim'
-            or provider.helcim_checkout_mode != 'helcim_js'
-            or payment_method.code != 'card'
-        ):
-            donation.unlink()
-            return {'error': 'invalid_provider'}
-        if not provider.helcim_js_config_token:
-            donation.unlink()
-            return {
-                'error': 'helcim_js_not_configured',
-                'message': _(
-                    'Helcim.js is not configured. Add a Helcim.js Configuration '
-                    'Token on the Helcim payment provider.'
-                ),
-            }
+            raise ValidationError(self._donation_error_message(exc.args[0] if exc.args else ''))
 
         try:
-            tx, payment_method, operation = self._create_donation_payment_transaction(
-                donation, provider, payment_method,
+            return self._donation_start_payment(
+                donation, provider_id, payment_method_id, token_id, flow,
+                tokenization_requested,
             )
-        except ValidationError as exc:
+        except (AccessError, ValidationError, UserError):
             donation.unlink()
-            return {'error': 'no_payment_method', 'message': exc.args[0]}
+            raise
 
-        customer_vals = provider._helcim_get_customer_code(donation.partner_id)
-        if customer_vals.get('errorMessage'):
-            donation.unlink()
-            return {'error': 'invalid_provider', 'message': customer_vals['errorMessage']}
-
-        donation_sudo = donation.sudo()
-        donation_sudo._portal_ensure_token()
-        return {
-            'donation_id': donation.id,
-            'access_token': donation_sudo.access_token,
-            'amount': tx.amount,
-            'customer_code': customer_vals.get('customerCode'),
-            'tokenize': bool(tx.tokenize),
-            'operation': operation,
-        }
-
-    @http.route('/donate/prepare_helcim_pay', type='json', auth='public')
-    def donation_prepare_helcim_pay(self, **post):
-        """Create donation + transaction; return data for HelcimPay.js checkout."""
-        try:
-            donation = self._create_donation_from_post(post)
-        except ValueError as exc:
-            return {'error': str(exc.args[0])}
-
-        provider, payment_method = self._resolve_payment_selection(
-            post, donation.partner_id, donation.amount,
-        )
-        if (
-            not provider
-            or not payment_method
-            or provider.code != 'helcim'
-            or provider.helcim_checkout_mode != 'helcimpay_js'
-        ):
-            donation.unlink()
-            return {'error': 'invalid_provider'}
-
-        try:
-            tx, payment_method, operation = self._create_donation_payment_transaction(
-                donation, provider, payment_method,
-            )
-        except ValidationError as exc:
-            donation.unlink()
-            return {'error': 'no_payment_method', 'message': exc.args[0]}
-
-        donation_sudo = donation.sudo()
-        donation_sudo._portal_ensure_token()
-        return {
-            'donation_id': donation_sudo.id,
-            'reference': tx.reference,
-            'access_token': donation_sudo.access_token,
-            'payment_method_code': payment_method.code,
-            'tokenize': bool(tx.tokenize),
-            'operation': operation,
-        }
-
-    @http.route(
-        '/donate/helcim_js_complete',
-        type='http',
-        auth='public',
-        website=True,
-        methods=['POST'],
-        csrf=True,
-    )
-    def donation_helcim_js_complete(self, **post):
-        """Complete a donation after Helcim.js processed the card in the browser."""
-        try:
-            donation_id = int(post.get('donation_id') or 0)
-        except (TypeError, ValueError):
-            return request.redirect('/donate?error=invalid_payment')
-
-        donation = request.env['donation.donation'].sudo().browse(donation_id).exists()
-        if not donation or donation.state not in ('draft', 'pending'):
-            return request.redirect('/donate?error=invalid_payment')
-        # Only the browser that started this checkout holds the donation's token.
-        access_token = str(post.get('access_token') or '')
-        if not donation.access_token or not hmac.compare_digest(donation.access_token, access_token):
-            return request.redirect('/donate?error=invalid_payment')
-
-        tx = donation.payment_transaction_id
-        if not tx or tx.provider_code != 'helcim' or tx.state not in ('draft', 'pending'):
-            return request.redirect('/donate?error=invalid_payment')
-
-        tokenize = (
-            post.get('helcim_save_payment_method') == 'on'
-            or donation.is_recurring
-        )
-        try:
-            tx._helcim_process_js_post(post, tokenize=tokenize)
-        except ValidationError as exc:
-            donation.unlink()
-            return request.redirect(
-                '/donate?error=%s' % url_quote(str(exc.args[0])),
-            )
-        except Exception:
-            _logger.exception('Helcim.js payment failed for %s', tx.reference)
-            donation.unlink()
-            return request.redirect('/donate?error=invalid_payment')
-
-        if tx.state == 'done':
-            tx._post_process()
-            _logger.info(
-                'Donation %s paid via Helcim.js — search transaction ID %s in Helcim '
-                '(Payments → Test Transactions if the provider is in test mode).',
-                donation.name,
-                tx.provider_reference or '?',
-            )
-            return self._redirect_to_confirmation(donation)
-        if tx.state == 'pending':
-            donation.write({'state': 'pending'})
-            return request.redirect('/payment/status')
-        if tx.state == 'error':
-            msg = tx.state_message or _('Payment was declined.')
-            donation.unlink()
-            return request.redirect('/donate?error=%s' % url_quote(msg))
-
-        donation.unlink()
-        return request.redirect('/donate?error=invalid_payment')
-
-    def _extract_helcim_payment_data(self, post, payment_method, donation):
-        """Build payment payload for Helcim direct API from the donation form."""
+    def _donation_start_payment(
+        self, donation, provider_id, payment_method_id, token_id, flow, tokenization_requested,
+    ):
+        """Create the transaction for ``donation``; return its processing values."""
         partner = donation.partner_id
-        save = post.get('helcim_save_payment_method') == 'on' or donation.is_recurring
-        if payment_method.code == 'ach_direct_debit':
-            return {
-                'type': 'ach',
-                'bank_account_number': post.get('helcim_bank_account_number', ''),
-                'bank_routing': post.get('helcim_bank_routing', ''),
-                'bank_financial': post.get('helcim_bank_financial', ''),
-                'bank_transit': post.get('helcim_bank_transit', ''),
-                'bank_account_type': post.get('helcim_bank_account_type', '1'),
-                'bank_holder_type': post.get('helcim_bank_holder_type', '1'),
-                'bank_account_holder': post.get('helcim_bank_account_holder') or partner.name,
-                'bank_street': post.get('helcim_bank_street') or partner.street,
-                'bank_city': post.get('helcim_bank_city') or partner.city,
-                'bank_zip': post.get('helcim_bank_zip') or partner.zip,
-                'bank_state': post.get('helcim_bank_state') or (
-                    partner.state_id.code if partner.state_id else ''
-                ),
-                'bank_country': partner.country_id.code if partner.country_id else 'US',
-                'save_payment_method': save,
-            }
-        raise ValidationError(_('Unsupported Helcim payment method.'))
+        starts_later = donation.is_recurring and donation._recurring_starts_later()
+        token = request.env['payment.token']
+        if flow == 'token':
+            token = self._own_payment_token(token_id)
+            if not token or token.provider_id not in self._get_compatible_providers(
+                partner, donation.amount,
+            ):
+                raise ValidationError(_(
+                    'The saved payment method could not be used. Please choose another one.'
+                ))
+            donation.write({'payment_token_id': token.id, 'state': 'pending'})
+            if starts_later:
+                # Nothing to charge today: the saved method is charged on the date.
+                donation._finalize_recurring_setup()
+                donation._portal_ensure_token()
+                return {
+                    'donation_redirect': '/donate/confirmation/%s?access_token=%s' % (
+                        donation.id, donation.access_token,
+                    ),
+                }
+            provider = token.provider_id
+            payment_method = token.payment_method_id
+        elif flow in ('direct', 'redirect'):
+            providers = self._get_compatible_providers(partner, donation.amount)
+            provider = providers.filtered(lambda p: p.id == provider_id)
+            payment_method = request.env['payment.method'].sudo().browse(
+                payment_method_id or 0,
+            ).exists()
+            if not provider or not payment_method or provider not in payment_method.provider_ids:
+                raise ValidationError(_('Please select how you would like to pay.'))
+            if donation.is_recurring and not (
+                provider.allow_tokenization and payment_method.support_tokenization
+            ):
+                raise ValidationError(_(
+                    'This payment method cannot be saved for a recurring gift. '
+                    'Please choose another one, or give once.'
+                ))
+        else:
+            raise ValidationError(_('Please select how you would like to pay.'))
 
-    def _pay_with_helcim_api(self, donation, provider, payment_method, post):
-        """Process donation payment through the Helcim Payment API (native form)."""
-        try:
-            payment_data = self._extract_helcim_payment_data(post, payment_method, donation)
-        except ValidationError as exc:
-            donation.unlink()
-            return request.redirect(
-                '/donate?error=%s' % url_quote(str(exc.args[0])),
-            )
-
-        try:
-            tx, payment_method, operation = self._create_donation_payment_transaction(
-                donation, provider, payment_method,
-            )
-        except ValidationError:
-            donation.unlink()
-            return request.redirect('/donate?error=no_payment_method')
-
-        try:
-            tx._helcim_process_direct_payment(payment_data)
-        except ValidationError as exc:
-            donation.unlink()
-            return request.redirect(
-                '/donate?error=%s' % url_quote(str(exc.args[0])),
-            )
-        except Exception:
-            _logger.exception('Helcim direct API payment failed for %s', tx.reference)
-            donation.unlink()
-            return request.redirect('/donate?error=invalid_payment')
-
-        if tx.state == 'done':
-            tx._post_process()
-            return self._redirect_to_confirmation(donation)
-        if tx.state == 'pending':
-            donation.write({'state': 'pending'})
-            return request.redirect('/payment/status')
-        if tx.state == 'error':
-            msg = tx.state_message or _('Payment was declined.')
-            donation.unlink()
-            return request.redirect('/donate?error=%s' % url_quote(msg))
-
-        donation.unlink()
-        return request.redirect('/donate?error=invalid_payment')
+        # Guests only save a card for a recurring gift (see the payment form values).
+        tokenize = donation.is_recurring or (
+            bool(tokenization_requested) and not request.env.user._is_public()
+        )
+        request.update_context(delay_payment_request=True)
+        tx = self._payment_portal()._create_transaction(
+            provider_id=provider.id,
+            payment_method_id=payment_method.id,
+            token_id=token.id or None,
+            amount=donation.amount,
+            currency_id=donation.currency_id.id,
+            partner_id=partner.id,
+            flow=flow,
+            tokenization_requested=tokenize,
+            landing_route='/payment/confirmation',
+            reference_prefix=donation.name,
+            is_validation=bool(starts_later and flow != 'token'),
+            custom_create_values={'reference': donation.name},
+        )
+        donation.write({'payment_transaction_id': tx.id, 'state': 'pending'})
+        PaymentPortal._update_landing_route(
+            tx, payment_utils.generate_access_token(tx.partner_id.id, tx.amount, tx.currency_id.id),
+        )
+        if flow == 'token':
+            tx._send_payment_request()
+        return tx._get_processing_values()
 
     def _get_or_create_partner(self, post):
         if not request.env.user._is_public():
@@ -654,144 +435,6 @@ class DonationWebsiteController(http.Controller):
         return request.redirect(
             '/donate/confirmation/%s?access_token=%s' % (donation_sudo.id, donation_sudo.access_token)
         )
-
-    def _pay_with_saved_token(self, donation, token_id):
-        token = self._own_payment_token(token_id)
-        if not token:
-            donation.unlink()
-            return request.redirect('/donate?error=invalid_token')
-
-        if token.partner_id.commercial_partner_id != donation.partner_id.commercial_partner_id:
-            donation.unlink()
-            return request.redirect('/donate?error=invalid_token')
-
-        providers = self._get_compatible_providers(donation.partner_id, donation.amount)
-        if token.provider_id.id not in providers.ids:
-            donation.unlink()
-            return request.redirect('/donate?error=invalid_token')
-
-        donation.write({
-            'payment_token_id': token.id,
-            'state': 'pending',
-        })
-
-        recurring_starts_later = (
-            donation.is_recurring
-            and donation.recurring_start_date
-            and donation.recurring_start_date > fields.Date.today()
-        )
-        if recurring_starts_later:
-            try:
-                donation._finalize_recurring_setup()
-            except Exception:
-                donation.unlink()
-                return request.redirect('/donate?error=invalid_payment')
-            return self._redirect_to_confirmation(donation)
-
-        access_token = payment_utils.generate_access_token(
-            donation.partner_id.id,
-            donation.amount,
-            donation.currency_id.id,
-        )
-        try:
-            tx = self._payment_portal()._create_transaction(
-                provider_id=token.provider_id.id,
-                payment_method_id=token.payment_method_id.id,
-                token_id=token.id,
-                amount=donation.amount,
-                currency_id=donation.currency_id.id,
-                partner_id=donation.partner_id.id,
-                flow='token',
-                tokenization_requested=False,
-                landing_route='/payment/confirmation',
-                reference_prefix=donation.name,
-                custom_create_values={'reference': donation.name},
-            )
-        except (AccessError, ValidationError):
-            donation.unlink()
-            return request.redirect('/donate?error=invalid_token')
-
-        donation.write({'payment_transaction_id': tx.id})
-        PaymentPortal._update_landing_route(tx, access_token)
-        return request.redirect('/payment/status')
-
-    def _redirect_to_payment(self, donation, provider, payment_method, post):
-        if not provider.exists():
-            donation.unlink()
-            return request.redirect('/donate?error=invalid_provider')
-
-        try:
-            tx, payment_method, operation = self._create_donation_payment_transaction(
-                donation, provider, payment_method,
-            )
-        except ValidationError:
-            donation.unlink()
-            return request.redirect('/donate?error=no_payment_method')
-
-        redirect_html = ''
-        if operation == 'online_redirect':
-            processing_values = tx._get_processing_values()
-            redirect_html = processing_values.get('redirect_form_html') or ''
-            if redirect_html and not isinstance(redirect_html, Markup):
-                redirect_html = Markup(redirect_html)
-
-        demo_direct = (
-            provider.code == 'demo'
-            and not redirect_html
-            and operation in ('online_direct', 'validation')
-        )
-        helcim_pay_autostart = (
-            provider.code == 'helcim'
-            and provider.helcim_checkout_mode == 'helcimpay_js'
-            and operation in ('online_direct', 'validation')
-        )
-        if helcim_pay_autostart:
-            donation.sudo()._portal_ensure_token()
-
-        return request.render('donation_management.donation_payment_redirect', {
-            'tx': tx,
-            'donation': donation,
-            'redirect_form_html': redirect_html,
-            'demo_direct': demo_direct,
-            'helcim_pay_autostart': helcim_pay_autostart,
-            'payment_method': payment_method,
-        })
-
-    @http.route(
-        '/donate/demo/pay',
-        type='http',
-        auth='public',
-        website=True,
-        methods=['POST'],
-        csrf=True,
-    )
-    def donation_demo_pay(self, **post):
-        try:
-            tx_id_int = int(post.get('tx_id', 0))
-        except (TypeError, ValueError):
-            return request.redirect('/donate?error=invalid_payment')
-
-        tx = request.env['payment.transaction'].sudo().browse(tx_id_int)
-        if not tx.exists() or tx.provider_code != 'demo':
-            return request.redirect('/donate?error=invalid_payment')
-
-        donation = request.env['donation.donation'].sudo().search([
-            ('payment_transaction_id', '=', tx.id),
-        ], limit=1)
-        if not donation:
-            return request.redirect('/donate?error=invalid_payment')
-
-        simulated_state = post.get('simulated_state') or 'done'
-        if simulated_state not in ('done', 'pending', 'cancel', 'error'):
-            simulated_state = 'done'
-
-        tx._handle_notification_data('demo', {
-            'reference': tx.reference,
-            'payment_details': (post.get('customer_input') or '').strip(),
-            'simulated_state': simulated_state,
-        })
-        PaymentPostProcessing.monitor_transaction(tx)
-        return request.redirect('/payment/status')
 
     @http.route('/donate/confirmation/<int:donation_id>', type='http', auth='public', website=True)
     def donation_confirmation(self, donation_id, access_token=None, **kwargs):

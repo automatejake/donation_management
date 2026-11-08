@@ -23,8 +23,6 @@ class PaymentProvider(models.Model):
         self.ensure_one()
         if is_validation:
             return 'validation'
-        if self.code == 'helcim' and self.helcim_checkout_mode == 'helcimpay_js':
-            return 'online_direct'
         redirect_form_view = self._get_redirect_form_view(is_validation=False)
         return 'online_redirect' if redirect_form_view else 'online_direct'
 
