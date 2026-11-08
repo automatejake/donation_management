@@ -577,8 +577,12 @@ class DonationRecurringRule(models.Model):
         return '%s/donation.recurring.rule/%s/%s' % (db_uuid, self.id, self.next_donation_date)
 
     def _charge_context(self):
-        """Context for the scheduled charge; payment bridges add their own keys."""
-        return {'donation_charge_key': self._charge_idempotency_key()}
+        """Context for the scheduled charge.
+
+        ``payment_idempotency_key`` is the same for every attempt at the same
+        charge; providers that support it (Helcim does) then charge only once.
+        """
+        return {'payment_idempotency_key': self._charge_idempotency_key()}
 
     def _create_recurring_donation(self):
         self.ensure_one()

@@ -35,13 +35,12 @@
 
                                 <div class="card shadow-sm">
                                     <div class="card-body p-4">
-                                        <form action="/donate/submit" method="POST"
-                                              id="o_donation_form"
+                                        <div id="o_donation_form"
                                               class="donation-form"
+                                              t-att-data-fee-percents="donation_fee_percents"
                                               t-att-data-default-fee-percent="default_fee_percent"
                                               t-att-data-is-public="user._is_public() and '1' or '0'"
                                               t-att-data-partner-country="user.partner_id.country_id.code if not user._is_public() and user.partner_id.country_id else 'US'">
-                                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                                             <input type="hidden" name="fee_percent" id="fee_percent"
                                                    t-att-value="default_fee_percent"/>
 
@@ -141,141 +140,6 @@
                                                           placeholder="Share why you're donating or leave a message..."></textarea>
                                             </div>
 
-                                            <!-- Payment method -->
-                                            <h5 class="mb-3">Payment Method</h5>
-                                            <div class="donation-payment-picker mb-4" id="donation_payment_methods">
-                                                <div class="visually-hidden" aria-hidden="true" id="donation_payment_method_inputs">
-                                                    <t t-if="payment_tokens">
-                                                        <t t-foreach="payment_tokens" t-as="token">
-                                                            <t t-set="token_picker_meta" t-value="token.payment_method_id.name + ' · ' + token.provider_id.name"/>
-                                                            <input type="radio"
-                                                                   class="donation-payment-option-input"
-                                                                   name="payment_method"
-                                                                   t-att-id="'payment_token_%s' % token.id"
-                                                                   t-att-value="'token_%s' % token.id"
-                                                                   t-att-data-fee-percent="token.payment_method_id.get_donation_fee_coverage_percent()"
-                                                                   t-att-data-picker-title="token.display_name"
-                                                                   t-att-data-picker-meta="token_picker_meta"
-                                                                   t-att-data-picker-icon="'credit-card'"
-                                                                   t-att-checked="'checked' if token_index == 0 else None"
-                                                                   required="required"/>
-                                                        </t>
-                                                    </t>
-                                                    <div id="donation_saved_tokens_guest_radios"/>
-                                                    <t t-foreach="payment_options" t-as="option">
-                                                        <t t-set="pm" t-value="option['payment_method']"/>
-                                                        <t t-set="provider" t-value="option['provider']"/>
-                                                        <t t-set="pm_fee_pct" t-value="round(pm.get_donation_fee_coverage_percent(), 2)"/>
-                                                        <t t-set="pm_picker_meta" t-value="provider.name + ' · Fee if covered: ' + str(pm_fee_pct) + '%'"/>
-                                                        <input type="radio"
-                                                               class="donation-payment-option-input"
-                                                               name="payment_method"
-                                                               t-att-id="'payment_method_%s' % pm.id"
-                                                               t-att-value="'method_%s' % pm.id"
-                                                               t-att-data-fee-percent="pm.get_donation_fee_coverage_percent()"
-                                                               t-att-data-provider-code="provider.code"
-                                                               t-att-data-payment-method-code="pm.code"
-                                                               t-att-data-picker-title="pm.name"
-                                                               t-att-data-picker-meta="pm_picker_meta"
-                                                               t-att-data-picker-icon="'credit-card' if pm.code == 'card' else 'university' if pm.code == 'ach_direct_debit' else 'bank'"
-                                                               t-att-data-picker-is-new="'1'"
-                                                               t-att-checked="'checked' if (not payment_tokens and option_index == 0) else None"
-                                                               required="required"/>
-                                                    </t>
-                                                </div>
-
-                                                <label class="form-label donation-payment-dropdown-label mb-2" for="donation_payment_dropdown_toggle">
-                                                    How would you like to pay?
-                                                </label>
-                                                <div class="dropdown donation-payment-dropdown w-100">
-                                                    <button type="button"
-                                                            id="donation_payment_dropdown_toggle"
-                                                            class="donation-payment-dropdown-toggle dropdown-toggle w-100"
-                                                            data-bs-toggle="dropdown"
-                                                            data-bs-auto-close="true"
-                                                            aria-expanded="false">
-                                                        <span class="donation-payment-dropdown-leading" aria-hidden="true">
-                                                            <i class="fa fa-credit-card donation-payment-dropdown-icon"/>
-                                                        </span>
-                                                        <span class="donation-payment-dropdown-text">
-                                                            <span class="donation-payment-dropdown-title">Select payment method</span>
-                                                            <span class="donation-payment-dropdown-meta text-muted"/>
-                                                        </span>
-                                                    </button>
-                                                    <ul class="dropdown-menu donation-payment-dropdown-menu w-100 shadow-sm" id="donation_payment_dropdown_menu">
-                                                        <t t-if="payment_tokens">
-                                                            <li><h6 class="dropdown-header">Saved payment methods</h6></li>
-                                                            <t t-foreach="payment_tokens" t-as="token">
-                                                                <li>
-                                                                    <button type="button"
-                                                                            class="dropdown-item donation-payment-picker-item"
-                                                                            t-att-data-radio-id="'payment_token_%s' % token.id">
-                                                                        <span class="donation-payment-picker-item-icon">
-                                                                            <i class="fa fa-credit-card text-muted" aria-hidden="true"/>
-                                                                        </span>
-                                                                        <span class="donation-payment-picker-item-body">
-                                                                            <span class="donation-payment-picker-item-title">
-                                                                                <t t-esc="token.display_name"/>
-                                                                            </span>
-                                                                            <span class="donation-payment-picker-item-meta">
-                                                                                <t t-esc="token.payment_method_id.name"/>
-                                                                                · <t t-esc="token.provider_id.name"/>
-                                                                            </span>
-                                                                        </span>
-                                                                    </button>
-                                                                </li>
-                                                            </t>
-                                                        </t>
-                                                        <li id="donation_saved_tokens_guest_header" class="d-none">
-                                                            <h6 class="dropdown-header">Saved payment methods</h6>
-                                                        </li>
-                                                        <!-- Guest saved cards: <li> items inserted after header by JS -->
-                                                        <t t-if="payment_options">
-                                                            <li t-if="payment_tokens">
-                                                                <hr class="dropdown-divider"/>
-                                                            </li>
-                                                            <li><h6 class="dropdown-header">Pay with a new method</h6></li>
-                                                            <t t-foreach="payment_options" t-as="option">
-                                                                <t t-set="pm" t-value="option['payment_method']"/>
-                                                                <t t-set="provider" t-value="option['provider']"/>
-                                                                <li>
-                                                                    <button type="button"
-                                                                            class="dropdown-item donation-payment-picker-item donation-payment-picker-item--new"
-                                                                            t-att-data-radio-id="'payment_method_%s' % pm.id">
-                                                                        <span class="donation-payment-picker-item-icon">
-                                                                            <img t-if="pm.image_payment_form"
-                                                                                 t-att-src="image_data_uri(pm.image_payment_form)"
-                                                                                 class="donation-provider-logo"
-                                                                                 t-att-alt="pm.name"/>
-                                                                            <i t-else=""
-                                                                               t-attf-class="fa fa-#{ 'credit-card' if pm.code == 'card' else 'university' if pm.code == 'ach_direct_debit' else 'bank' } text-muted"
-                                                                               aria-hidden="true"/>
-                                                                        </span>
-                                                                        <span class="donation-payment-picker-item-body">
-                                                                            <span class="donation-payment-picker-item-title">
-                                                                                <t t-esc="pm.name"/>
-                                                                            </span>
-                                                                            <span class="donation-payment-picker-item-meta">
-                                                                                <t t-esc="provider.name"/>
-                                                                                · Fee if covered:
-                                                                                <t t-esc="round(pm.get_donation_fee_coverage_percent(), 2)"/>%
-                                                                            </span>
-                                                                        </span>
-                                                                    </button>
-                                                                </li>
-                                                            </t>
-                                                        </t>
-                                                    </ul>
-                                                </div>
-                                                <button type="button"
-                                                        id="donation_payment_edit_btn"
-                                                        class="btn btn-link btn-sm ps-0 mt-2 d-none">
-                                                    <i class="fa fa-pencil me-1" aria-hidden="true"/> Enter payment details
-                                                </button>
-                                                <p t-if="not payment_options and not payment_tokens" class="text-muted mb-0">
-                                                    No payment methods are available. Please contact us.
-                                                </p>
-                                            </div>
                                             <!-- Cover fees -->
                                             <div class="mb-4 border-top pt-3">
                                                 <div class="form-check">
@@ -291,112 +155,25 @@
                                                 </small>
                                             </div>
 
-                                            <!-- Payment details modal (new methods) -->
-                                            <div class="modal fade" id="o_donation_payment_modal" tabindex="-1"
-                                                 aria-labelledby="o_donation_payment_modal_label" aria-hidden="true">
-                                                <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
-                                                    <div class="modal-content donation-payment-modal">
-                                                        <div class="modal-header border-0 pb-0">
-                                                            <h5 class="modal-title" id="o_donation_payment_modal_label">Payment details</h5>
-                                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"/>
-                                                        </div>
-                                                        <div class="modal-body pt-2">
-                                                            <p id="o_donation_payment_modal_intro" class="text-muted small mb-3 d-none"/>
-                                                        </div>
-                                                        <div class="modal-footer border-0 pt-0">
-                                                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                                                            <button type="button" class="btn btn-primary" id="o_donation_payment_modal_done">
-                                                                Done
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div class="d-grid">
-                                                <button type="submit" class="btn btn-primary btn-lg">
-                                                    <i class="fa fa-heart me-2"></i> Donate Now
-                                                </button>
+                                            <!-- Payment: Odoo's standard payment form. Each provider
+                                                 shows its own fields here (card, bank, ...), as on
+                                                 an invoice or in the shop. -->
+                                            <h5 class="mb-3">Payment Method</h5>
+                                            <div id="donation_payment_methods" class="mb-2">
+                                                <t t-call="payment.form"/>
                                             </div>
 
                                             <p class="text-muted text-center mt-3 small">
                                                 Your donation is secure and processed through our trusted payment partners.
                                             </p>
                                             </div>
-                                        </form>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </section>
-            </div>
-        </t>
-    </template>
-
-    <!-- Payment Redirect Template -->
-    <template id="donation_payment_redirect" name="Donation Payment Processing">
-        <t t-call="website.layout">
-            <div id="wrap">
-                <div class="container py-5">
-                    <div class="row justify-content-center">
-                        <div class="col-lg-8 text-center">
-                            <h2 class="mb-4">Processing your donation</h2>
-                            <p class="lead" t-if="redirect_form_html">
-                                Please wait while we redirect you to the payment provider…
-                            </p>
-                            <t t-if="redirect_form_html">
-                                <div id="o_donation_payment_redirect" t-out="redirect_form_html"/>
-                                <script>
-                                    document.addEventListener('DOMContentLoaded', function () {
-                                        var root = document.getElementById('o_donation_payment_redirect');
-                                        if (!root) { return; }
-                                        var form = root.querySelector('form');
-                                        if (form) { form.submit(); }
-                                    });
-                                </script>
-                            </t>
-
-                            <t t-if="demo_direct">
-                                <p class="text-muted mb-4">
-                                    This is the test payment provider. Choose a simulated outcome, then confirm.
-                                </p>
-                                <form action="/donate/demo/pay" method="post" class="text-start mx-auto" style="max-width: 520px;">
-                                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                                    <input type="hidden" name="tx_id" t-att-value="tx.id"/>
-                                    <div class="row g-2">
-                                        <div class="col-12 col-md-6">
-                                            <label class="form-label small" for="customer_input">Payment details (test)</label>
-                                            <input type="text" name="customer_input" id="customer_input" class="form-control"
-                                                   placeholder="XXXX XXXX XXXX XXXX"/>
-                                        </div>
-                                        <div class="col-12 col-md-6">
-                                            <label class="form-label small" for="simulated_state">Simulated result</label>
-                                            <select name="simulated_state" id="simulated_state" class="form-select">
-                                                <option value="done">Successful</option>
-                                                <option value="pending">Pending</option>
-                                                <option value="cancel">Cancelled</option>
-                                                <option value="error">Error</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="d-grid mt-4">
-                                        <button type="submit" class="btn btn-primary btn-lg">Pay now</button>
-                                    </div>
-                                </form>
-                            </t>
-
-
-                            <t t-if="not redirect_form_html and not demo_direct">
-                                <div class="alert alert-warning">
-                                    Payment could not be started for this provider configuration.
-                                    Please try another payment method or contact support.
-                                </div>
-                                <a href="/donate" class="btn btn-secondary">Back to donation form</a>
-                            </t>
-                        </div>
-                    </div>
-                </div>
             </div>
         </t>
     </template>

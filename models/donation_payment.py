@@ -70,8 +70,14 @@ class PaymentTransaction(models.Model):
     _inherit = 'payment.transaction'
 
     def _donation_after_payment_done(self, donation):
-        """Hook for payment bridges once a donation's payment is recorded."""
-        return True
+        """Hook for payment providers once a donation's payment is recorded.
+
+        A provider app (Helcim links the gift to its deposit batch) adds its
+        own implementation without depending on this app, so whichever is
+        loaded first still calls the other.
+        """
+        parent = getattr(super(), '_donation_after_payment_done', None)
+        return parent(donation) if parent else True
 
     def _post_process(self):
         """Donation payments: post receipts/revenue entry only (no invoice, no AR payment)."""

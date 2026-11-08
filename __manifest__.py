@@ -8,7 +8,7 @@
         Donation Management Module
         ===========================
         * Accept one-time and recurring donations via website
-        * Works with any Odoo payment provider (Helcim through the donation_management_helcim bridge)
+        * Works with any Odoo payment provider: the giving page uses Odoo's standard payment form
         * Donor portal for viewing donation history
         * Automatic recurring donation processing
         * Payment token support for saved cards
