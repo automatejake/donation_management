@@ -23,8 +23,8 @@ class DonationPledge(models.Model):
     """A family's stewardship commitment for one campaign (usually a year).
 
     Nothing is charged from a pledge. Progress counts the family's confirmed
-    gifts dated inside the campaign's dates (to the pledge's fund, when one is
-    set), however they gave: online, recurring, or envelope in a Sunday batch.
+    gifts to any fund dated inside the campaign's dates, however they gave:
+    online, recurring, or envelope in a Sunday batch.
     """
     _name = 'donation.pledge'
     _description = 'Stewardship Pledge'
@@ -42,10 +42,6 @@ class DonationPledge(models.Model):
         'res.company', string='Company', required=True, default=lambda self: self.env.company,
     )
     currency_id = fields.Many2one(related='company_id.currency_id', string='Currency')
-    category_id = fields.Many2one(
-        'donation.category', string='Fund',
-        help='Only gifts to this fund count toward the pledge. Leave empty to count gifts to every fund.',
-    )
     amount = fields.Monetary(string='Pledged', required=True, currency_field='currency_id', tracking=True)
     frequency = fields.Selection(
         PLEDGE_FREQUENCY_SELECTION, string='Plans to Give', required=True, default='monthly', tracking=True,
@@ -85,8 +81,6 @@ class DonationPledge(models.Model):
             ('date', '>=', datetime.combine(campaign.start_date, time.min)),
             ('date', '<=', datetime.combine(campaign.end_date, time.max)),
         ]
-        if self.category_id:
-            domain.append(('category_id', '=', self.category_id.id))
         return domain
 
     def _expected_by(self, today):
@@ -103,7 +97,7 @@ class DonationPledge(models.Model):
         share = ((today - start).days + 1) / total_days
         return self.currency_id.round(self.amount * share)
 
-    @api.depends('amount', 'frequency', 'category_id', 'partner_id', 'campaign_id.start_date', 'campaign_id.end_date')
+    @api.depends('amount', 'frequency', 'partner_id', 'campaign_id.start_date', 'campaign_id.end_date')
     def _compute_progress(self):
         today = fields.Date.context_today(self)
         Donation = self.env['donation.donation'].sudo()
