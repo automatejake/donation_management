@@ -43,13 +43,12 @@ class PledgeCommon:
         donation.with_context(skip_donation_complete=True).write({'state': state})
         return donation
 
-    def _pledge(self, partner, amount, frequency='monthly', category=None):
+    def _pledge(self, partner, amount, frequency='monthly'):
         return self.env['donation.pledge'].create({
             'campaign_id': self.campaign.id,
             'partner_id': partner.id,
             'amount': amount,
             'frequency': frequency,
-            'category_id': category.id if category else False,
         })
 
 
@@ -73,12 +72,12 @@ class TestDonationPledge(PledgeCommon, TransactionCase):
         self.assertEqual(pledge.remaining, 950.0)
         self.assertAlmostEqual(pledge.progress, 250.0 / 12.0, places=2)
 
-    def test_fund_limits_what_counts(self):
-        pledge = self._pledge(self.maria, 1000.0, category=self.building)
+    def test_gifts_to_every_fund_count(self):
+        pledge = self._pledge(self.maria, 1000.0)
         self._gift(self.maria, 100.0, datetime(2026, 2, 1, 12), category=self.general)
         self._gift(self.maria, 300.0, datetime(2026, 2, 1, 12), category=self.building)
         pledge.invalidate_recordset()
-        self.assertEqual(pledge.given, 300.0)
+        self.assertEqual(pledge.given, 400.0)
 
     def test_expected_follows_the_calendar(self):
         pledge = self._pledge(self.maria, 1200.0)
